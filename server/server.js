@@ -21,6 +21,7 @@ const io = socketIo(server, {
     origin: [
       'https://connectsphere-bice.vercel.app',
       'https://connectsphere-phi.vercel.app',
+      'https://connectsphere-lowrences-projects-9eb17f85.vercel.app',
       'http://localhost:3000'
     ],
     methods: ["GET", "POST"]
@@ -32,6 +33,7 @@ app.use(cors({
   origin: [
     'https://connectsphere-bice.vercel.app',
     'https://connectsphere-phi.vercel.app', // new Vercel domain
+    'https://connectsphere-lowrences-projects-9eb17f85.vercel.app',
     'http://localhost:3000'
   ],
   credentials: true
