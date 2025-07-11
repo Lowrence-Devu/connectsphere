@@ -22,8 +22,9 @@ const io = socketIo(server, {
 // Middleware
 app.use(cors({
   origin: [
-    'https://connectsphere-bice.vercel.app', // your Vercel frontend URL
-    'http://localhost:3000', // for local development
+    'https://connectsphere-bice.vercel.app',
+    'https://connectsphere-phi.vercel.app', // new Vercel domain
+    'http://localhost:3000'
   ],
   credentials: true
 }));
