@@ -151,5 +151,9 @@ app.use('/api', require('./routes/upload'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/messages', require('./routes/messages'));
 
+// Google OAuth routes
+app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), authController.googleAuthCallback);
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
