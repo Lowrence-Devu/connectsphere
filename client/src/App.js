@@ -8,8 +8,7 @@ import Explore from './components/Explore';
 import DM from './components/DM';
 import Header from './components/Header';
 
-const API_URL = 'http://localhost:5000/api';
-
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 
 function App() {
@@ -98,7 +97,7 @@ function App() {
     fetchPosts();
     if (token) {
       // Initialize Socket.IO connection
-      socket.current = io('http://localhost:5000');
+      socket.current = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000');
       
       socket.current.on('connect', () => {
         console.log('Connected to server');
