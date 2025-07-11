@@ -14,7 +14,11 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "https://connectsphere-bice.vercel.app",
+    origin: [
+      'https://connectsphere-bice.vercel.app',
+      'https://connectsphere-phi.vercel.app',
+      'http://localhost:3000'
+    ],
     methods: ["GET", "POST"]
   }
 });
