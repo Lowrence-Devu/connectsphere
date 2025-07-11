@@ -29,10 +29,18 @@ const Profile = ({
       {/* Profile Header */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center space-x-4 mb-4">
-          <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-2xl">
-              {userProfile.username?.charAt(0).toUpperCase()}
-            </span>
+          <div className="w-20 h-20 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 overflow-hidden">
+            {userProfile.profileImage ? (
+              <img
+                src={userProfile.profileImage}
+                alt="Avatar"
+                className="w-20 h-20 rounded-full object-cover border-2 border-blue-500"
+              />
+            ) : (
+              <span className="text-white font-bold text-2xl">
+                {userProfile.username?.charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
