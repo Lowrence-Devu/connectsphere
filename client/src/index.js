@@ -4,11 +4,13 @@ import './index.css';
 import App from './App';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 import 'stream-browserify';
+import { Buffer } from 'buffer';
+import 'util';
 
-// Polyfill for process in browser (for simple-peer and dependencies)
+// Polyfill for process and Buffer in browser (for simple-peer and dependencies)
+window.Buffer = Buffer;
 window.process = window.process || {};
 window.process.env = window.process.env || { NODE_ENV: 'development' };
-// Polyfill for process.nextTick
 window.process.nextTick = function (cb) {
   return Promise.resolve().then(cb);
 };
