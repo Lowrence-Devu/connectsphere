@@ -14,16 +14,19 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-     origin: [
-      'https://connectsphere-etuw.onrender.com', 
-      'http://localhost:3000', 
-    ],
+    origin: "https://connectsphere-bice.vercel.app",
     methods: ["GET", "POST"]
   }
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://connectsphere-bice.vercel.app', // your Vercel frontend URL
+    'http://localhost:3000', // for local development
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
