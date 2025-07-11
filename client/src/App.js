@@ -7,6 +7,7 @@ import CreatePostModal from './components/CreatePostModal';
 import Explore from './components/Explore';
 import DM from './components/DM';
 import Header from './components/Header';
+import { useLocation, useHistory } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -74,6 +75,44 @@ function App() {
   const [uploadingPost, setUploadingPost] = useState(false);
   const [createPostError, setCreatePostError] = useState('');
   const [explorePosts, setExplorePosts] = useState([]);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [profileMenuOption, setProfileMenuOption] = useState(null); // 'account', 'settings', null
+
+  // Add hooks for handling Google OAuth redirect
+  const location = window.location;
+
+  useEffect(() => {
+    // Check for token in URL (after Google OAuth)
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    if (token) {
+      localStorage.setItem('token', token);
+      setToken(token);
+      // Fetch user info from backend with error handling
+      fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(async res => {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return res.json();
+          } else {
+            const text = await res.text();
+            throw new Error(text);
+          }
+        })
+        .then(data => {
+          setUser(data);
+          localStorage.setItem('user', JSON.stringify(data));
+        })
+        .catch(err => {
+          setError('Failed to fetch user info');
+          console.error('User info fetch error:', err);
+        });
+      // Remove token from URL
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []);
 
   useEffect(() => {
     // Apply dark mode class to body
@@ -370,14 +409,15 @@ function App() {
     localStorage.removeItem('searchHistory');
   };
 
-  const navigateToProfile = (user) => {
-    setSelectedUser(user);
-    setCurrentView('profile');
+  const navigateToProfile = async (user) => {
+    setProfileLoading(true);
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
     addToSearchHistory(user.username);
-    fetchUserProfile(user._id);
+    await fetchUserProfile(user._id);
+    setSelectedUser(user);
+    setCurrentView('profile');
   };
 
   const goBackToFeed = () => {
@@ -666,6 +706,16 @@ function App() {
     }
   }, [currentView]);
 
+  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editPassword, setEditPassword] = useState('');
+  const [editIsPrivate, setEditIsPrivate] = useState(user?.isPrivate || false);
+
+  useEffect(() => {
+    setEditUsername(user?.username || '');
+    setEditEmail(user?.email || '');
+    setEditIsPrivate(user?.isPrivate || false);
+  }, [user]);
+
   if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
@@ -747,6 +797,16 @@ function App() {
               {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              className="w-full bg-white border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm"
+              onClick={() => window.location.href = `${API_URL.replace('/api', '')}/api/auth/google`}
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48" className="mr-2"><g><path fill="#4285F4" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.23l6.85-6.85C35.64 2.68 30.18 0 24 0 14.82 0 6.73 5.82 2.69 14.09l7.98 6.19C12.13 13.16 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.55c0-1.64-.15-3.22-.42-4.74H24v9.01h12.42c-.54 2.9-2.18 5.36-4.65 7.01l7.19 5.6C43.98 37.13 46.1 31.3 46.1 24.55z"/><path fill="#FBBC05" d="M10.67 28.28c-1.13-3.36-1.13-6.99 0-10.35l-7.98-6.19C.9 15.1 0 19.41 0 24c0 4.59.9 8.9 2.69 12.26l7.98-6.19z"/><path fill="#EA4335" d="M24 48c6.18 0 11.64-2.05 15.53-5.59l-7.19-5.6c-2.01 1.35-4.59 2.15-7.34 2.15-6.38 0-11.87-3.66-14.33-8.99l-7.98 6.19C6.73 42.18 14.82 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></g></svg>
+              Sign in with Google
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -789,11 +849,11 @@ function App() {
                         {searchResults.map(user => (
                           <div
                             key={user._id}
-                            className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+                            className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer"
+                            onClick={async () => await navigateToProfile(user)}
                           >
                             <div 
-                              className="flex items-center space-x-3 flex-1 cursor-pointer"
-                              onClick={() => navigateToProfile(user)}
+                              className="flex items-center space-x-3 flex-1"
                             >
                               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
                                 <span className="text-white font-semibold text-sm">
@@ -809,7 +869,7 @@ function App() {
                             </div>
                             {user._id !== user?.id && (
                               <button
-                                onClick={(e) => {
+                                onClick={e => {
                                   e.stopPropagation();
                                   const isFollowing = user.followers?.includes(user?.id);
                                   if (isFollowing) {
@@ -1019,7 +1079,7 @@ function App() {
               {/* User Menu */}
               <div className="relative">
                 <button
-                  onClick={() => setCurrentView(currentView === 'profile' ? 'feed' : 'profile')}
+                  onClick={() => setShowProfileMenu((prev) => !prev)}
                   className="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
                 >
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -1028,6 +1088,36 @@ function App() {
                     </span>
                   </div>
                 </button>
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                    <ul className="py-2">
+                      <li>
+                        <button
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+                          onClick={() => setProfileMenuOption('account')}
+                        >
+                          Account Information
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+                          onClick={() => setProfileMenuOption('settings')}
+                        >
+                          Settings
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
+                          onClick={() => { setShowProfileMenu(false); handleLogout(); }}
+                        >
+                          Logout
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1054,84 +1144,74 @@ function App() {
             onPostClick={openPostModal}
             onSearch={fetchExplorePosts}
           />
-        ) : (currentView === 'feed' || currentView === 'profile') && (
-          <button
-            onClick={() => setShowCreatePostModal(true)}
-            className="fixed bottom-8 right-8 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full w-16 h-16 flex items-center justify-center text-4xl shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-            title="Create Post"
-            style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)' }}
-          >
-            +
-          </button>
-        )}
-        <CreatePostModal
-          open={showCreatePostModal}
-          onClose={() => setShowCreatePostModal(false)}
-          onCreate={handleCreatePostModal}
-          uploading={uploadingPost}
-          error={createPostError}
-        />
-        {currentView === 'profile' ? (
-          <>
-            {console.log('Profile debug:', { userProfile, userPosts })}
-            <Profile
-              userProfile={userProfile}
-              userPosts={userPosts}
-              user={user}
-              editingProfile={editingProfile}
-              editUsername={editUsername}
-              editBio={editBio}
-              editProfileImage={editProfileImage}
-              editImageFile={editImageFile}
-              editLoading={editLoading}
-              editError={editError}
-              setEditingProfile={setEditingProfile}
-              setEditUsername={setEditUsername}
-              setEditBio={setEditBio}
-              setEditProfileImage={setEditProfileImage}
-              setEditImageFile={setEditImageFile}
-              handleEditProfile={async (e) => {
-                e.preventDefault();
-                setEditLoading(true);
-                setEditError('');
-                let imageUrl = editProfileImage;
-                try {
-                  if (editImageFile) {
-                    const formData = new FormData();
-                    formData.append('image', editImageFile);
-                    const res = await fetch(`${API_URL}/upload`, {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
-                      body: formData,
+        ) : currentView === 'profile' ? (
+          profileLoading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+              <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+            </div>
+          ) : userProfile ? (
+            <>
+              {console.log('Profile debug:', { userProfile, userPosts })}
+              <Profile
+                userProfile={userProfile}
+                userPosts={userPosts}
+                user={user}
+                editingProfile={editingProfile}
+                editUsername={editUsername}
+                editBio={editBio}
+                editProfileImage={editProfileImage}
+                editImageFile={editImageFile}
+                editLoading={editLoading}
+                editError={editError}
+                setEditingProfile={setEditingProfile}
+                setEditUsername={setEditUsername}
+                setEditBio={setEditBio}
+                setEditProfileImage={setEditProfileImage}
+                setEditImageFile={setEditImageFile}
+                handleEditProfile={async (e) => {
+                  e.preventDefault();
+                  setEditLoading(true);
+                  setEditError('');
+                  let imageUrl = editProfileImage;
+                  try {
+                    if (editImageFile) {
+                      const formData = new FormData();
+                      formData.append('image', editImageFile);
+                      const res = await fetch(`${API_URL}/upload`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: formData,
+                      });
+                      const data = await res.json();
+                      if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
+                      imageUrl = data.url;
+                    }
+                    const res = await fetch(`${API_URL}/users/me`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
                     });
-                    const data = await res.json();
-                    if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
-                    imageUrl = data.url;
+                    const updated = await res.json();
+                    if (!res.ok) throw new Error(updated.message || 'Profile update failed');
+                    setUserProfile(updated);
+                    setUser(updated);
+                    localStorage.setItem('user', JSON.stringify(updated));
+                    setEditingProfile(false);
+                  } catch (err) {
+                    setEditError(err.message || 'Failed to update profile');
+                    console.error('Profile update error:', err);
                   }
-                  const res = await fetch(`${API_URL}/users/me`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
-                  });
-                  const updated = await res.json();
-                  if (!res.ok) throw new Error(updated.message || 'Profile update failed');
-                  setUserProfile(updated);
-                  setUser(updated);
-                  localStorage.setItem('user', JSON.stringify(updated));
-                  setEditingProfile(false);
-                } catch (err) {
-                  setEditError(err.message || 'Failed to update profile');
-                  console.error('Profile update error:', err);
-                }
-                setEditLoading(false);
-              }}
-              followUser={followUser}
-              unfollowUser={unfollowUser}
-              setCurrentView={setCurrentView}
-              setActiveChat={setActiveChat}
-              onPostClick={openPostModal}
-            />
-          </>
+                  setEditLoading(false);
+                }}
+                followUser={followUser}
+                unfollowUser={unfollowUser}
+                setCurrentView={setCurrentView}
+                setActiveChat={setActiveChat}
+                onPostClick={openPostModal}
+              />
+            </>
+          ) : null
         ) : currentView === 'feed' ? (
           <Feed
             posts={posts}
@@ -1204,6 +1284,168 @@ function App() {
           <span className="text-xs">Profile</span>
         </button>
       </nav>
+      {/* Floating Action Button for Create Post */}
+      {token && !showCreatePostModal && (
+        <button
+          className="fixed bottom-20 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
+          title="Create Post"
+          onClick={() => setShowCreatePostModal(true)}
+        >
+          +
+        </button>
+      )}
+      {/* Create Post Modal */}
+      {showCreatePostModal && (
+        <CreatePostModal
+          onClose={() => setShowCreatePostModal(false)}
+          onCreate={handleCreatePostModal}
+          uploading={uploadingPost}
+          error={createPostError}
+        />
+      )}
+      {/* Profile menu content modal */}
+      {profileMenuOption === 'account' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
+            <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={() => setProfileMenuOption(null)}>
+              ✕
+            </button>
+            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Account Information</h2>
+            <div className="space-y-2">
+              <div><span className="font-medium">Username:</span> {user?.username}</div>
+              <div><span className="font-medium">Email:</span> {user?.email}</div>
+              <div><span className="font-medium">Bio:</span> {user?.bio || 'No bio set.'}</div>
+              <div><span className="font-medium">Joined:</span> {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {profileMenuOption === 'settings' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
+            <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={() => setProfileMenuOption(null)}>
+              ✕
+            </button>
+            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Settings</h2>
+            <form
+              className="space-y-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setEditLoading(true);
+                setEditError('');
+                try {
+                  const res = await fetch(`${API_URL}/auth/settings`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                      username: editUsername,
+                      email: editEmail,
+                      password: editPassword,
+                      isPrivate: editIsPrivate
+                    })
+                  });
+                  const updated = await res.json();
+                  if (!res.ok) throw new Error(updated.message || 'Settings update failed');
+                  setUser(updated);
+                  localStorage.setItem('user', JSON.stringify(updated));
+                  setEditPassword('');
+                  setProfileMenuOption(null);
+                } catch (err) {
+                  setEditError(err.message || 'Failed to update settings');
+                }
+                setEditLoading(false);
+              }}
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                <input
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={editUsername}
+                  onChange={e => setEditUsername(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                <input
+                  type="password"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={editPassword}
+                  onChange={e => setEditPassword(e.target.value)}
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={editIsPrivate}
+                  onChange={e => setEditIsPrivate(e.target.checked)}
+                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  id="private-account-toggle"
+                />
+                <label htmlFor="private-account-toggle" className="text-sm text-gray-700 dark:text-gray-300">Private Account</label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={darkMode}
+                  onChange={toggleDarkMode}
+                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  id="dark-mode-toggle"
+                />
+                <label htmlFor="dark-mode-toggle" className="text-sm text-gray-700 dark:text-gray-300">Dark Mode</label>
+              </div>
+              {editError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+                  {editError}
+                </div>
+              )}
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={editLoading}
+              >
+                {editLoading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </form>
+            <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+              <button
+                className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-all duration-200"
+                onClick={async () => {
+                  if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) return;
+                  setEditLoading(true);
+                  try {
+                    const res = await fetch(`${API_URL}/auth/delete`, {
+                      method: 'DELETE',
+                      headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (!res.ok) throw new Error('Failed to delete account');
+                    handleLogout();
+                  } catch (err) {
+                    setEditError('Failed to delete account');
+                  }
+                  setEditLoading(false);
+                }}
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
