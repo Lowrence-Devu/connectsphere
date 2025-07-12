@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import io from 'socket.io-client';
 import Feed from './components/Feed';
 import Profile from './components/Profile';
 import PostModal from './components/PostModal';
 import CreatePostModal from './components/CreatePostModal';
+import CreateStoryModal from './components/CreateStoryModal';
+import CreateReelModal from './components/CreateReelModal';
+import Reels from './components/Reels';
 import Explore from './components/Explore';
 import DM from './components/DM';
 
@@ -72,6 +75,18 @@ function App() {
   const [explorePosts, setExplorePosts] = useState([]);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [profileMenuOption, setProfileMenuOption] = useState(null); // 'account', 'settings', null
+  
+  // Stories state
+  const [stories, setStories] = useState([]);
+  const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
+  const [uploadingStory, setUploadingStory] = useState(false);
+  const [createStoryError, setCreateStoryError] = useState('');
+
+  // Reels state
+  const [reels, setReels] = useState([]);
+  const [showCreateReelModal, setShowCreateReelModal] = useState(false);
+  const [uploadingReel, setUploadingReel] = useState(false);
+  const [createReelError, setCreateReelError] = useState('');
 
   // Add hooks for handling Google OAuth redirect
   const location = window.location;
@@ -638,6 +653,216 @@ function App() {
     }
   }, [currentView]);
 
+  // Stories functions
+  const fetchStories = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/stories`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      
+      // Sort stories so user's own stories appear first
+      if (user && data.length > 0) {
+        const sortedStories = data.sort((a, b) => {
+          const aIsUser = a.author._id === user._id;
+          const bIsUser = b.author._id === user._id;
+          
+          if (aIsUser && !bIsUser) return -1;
+          if (!aIsUser && bIsUser) return 1;
+          return 0;
+        });
+        setStories(sortedStories);
+      } else {
+        setStories(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stories:', err);
+      setStories([]);
+    }
+  }, [token, user]);
+
+  const handleCreateStory = async (storyData) => {
+    try {
+      setUploadingStory(true);
+      setCreateStoryError('');
+
+      // Upload media first
+      const mediaFormData = new FormData();
+      mediaFormData.append('image', storyData.get('media'));
+      
+      const uploadRes = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: mediaFormData
+      });
+      
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json();
+        throw new Error(errorData.message || 'Failed to upload media');
+      }
+      
+      const uploadData = await uploadRes.json();
+      
+      // Create story with uploaded media URL
+      const storyPayload = {
+        media: uploadData.url,
+        mediaType: storyData.get('mediaType'),
+        caption: storyData.get('caption')
+      };
+
+      const res = await fetch(`${API_URL}/stories`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(storyPayload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to create story');
+      
+      setShowCreateStoryModal(false);
+      setUploadingStory(false);
+      setCreateStoryError('');
+      fetchStories(); // Refresh stories
+    } catch (err) {
+      setCreateStoryError(err.message || 'Failed to create story');
+      setUploadingStory(false);
+    }
+  };
+
+  const handleStoryView = async (storyId) => {
+    try {
+      await fetch(`${API_URL}/stories/${storyId}/view`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error('Failed to mark story as viewed:', err);
+    }
+  };
+
+  const handleDeleteStory = async (storyId) => {
+    try {
+      const res = await fetch(`${API_URL}/stories/${storyId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        fetchStories(); // Refresh stories
+      }
+    } catch (err) {
+      console.error('Failed to delete story:', err);
+    }
+  };
+
+  // Fetch stories on mount
+  useEffect(() => {
+    if (token) {
+      fetchStories();
+    }
+  }, [fetchStories]);
+
+  // Reels functions
+  const fetchReels = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/reels`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setReels(data);
+    } catch (err) {
+      console.error('Failed to fetch reels:', err);
+      setReels([]);
+    }
+  }, [token]);
+
+  const handleCreateReel = async (reelData) => {
+    try {
+      setUploadingReel(true);
+      setCreateReelError('');
+
+      // Upload video first
+      const videoFormData = new FormData();
+      videoFormData.append('video', reelData.get('video'));
+      
+      const uploadRes = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: videoFormData
+      });
+      
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json();
+        throw new Error(errorData.message || 'Failed to upload video');
+      }
+      
+      const uploadData = await uploadRes.json();
+      
+      // Create reel with uploaded video URL
+      const reelPayload = {
+        video: uploadData.url,
+        caption: reelData.get('caption'),
+        duration: reelData.get('duration')
+      };
+
+      const res = await fetch(`${API_URL}/reels`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(reelPayload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to create reel');
+      
+      setShowCreateReelModal(false);
+      setUploadingReel(false);
+      setCreateReelError('');
+      fetchReels(); // Refresh reels
+    } catch (err) {
+      setCreateReelError(err.message || 'Failed to create reel');
+      setUploadingReel(false);
+    }
+  };
+
+  const handleReelView = async (reelId) => {
+    try {
+      await fetch(`${API_URL}/reels/${reelId}/view`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error('Failed to mark reel as viewed:', err);
+    }
+  };
+
+  const handleDeleteReel = async (reelId) => {
+    try {
+      const res = await fetch(`${API_URL}/reels/${reelId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        fetchReels(); // Refresh reels
+      }
+    } catch (err) {
+      console.error('Failed to delete reel:', err);
+    }
+  };
+
+  // Fetch reels on mount
+  useEffect(() => {
+    if (token) {
+      fetchReels();
+    }
+  }, [fetchReels]);
+
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [editPassword, setEditPassword] = useState('');
   const [editIsPrivate, setEditIsPrivate] = useState(user?.isPrivate || false);
@@ -1162,6 +1387,18 @@ function App() {
             onToggleComments={toggleComments}
             onNavigateToProfile={navigateToProfile}
             onPostClick={openPostModal}
+            stories={stories}
+            onStoryView={handleStoryView}
+            onCreateStory={() => setShowCreateStoryModal(true)}
+            onDeleteStory={handleDeleteStory}
+          />
+        ) : currentView === 'reels' ? (
+          <Reels
+            reels={reels}
+            user={user}
+            onReelView={handleReelView}
+            onCreateReel={() => setShowCreateReelModal(true)}
+            onDeleteReel={handleDeleteReel}
           />
         ) : null}
         {showPostModal && selectedPost && (
@@ -1195,6 +1432,13 @@ function App() {
           <span className="text-xs">Explore</span>
         </button>
         <button
+          className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('reels')}
+        >
+          <span className="text-xl">🎬</span>
+          <span className="text-xs">Reels</span>
+        </button>
+        <button
           className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
           onClick={() => setCurrentView('dm')}
         >
@@ -1216,13 +1460,24 @@ function App() {
         </button>
       </nav>
       {/* Floating Action Button for Create Post */}
-      {token && !showCreatePostModal && (
+      {token && !showCreatePostModal && currentView !== 'reels' && (
         <button
           className="fixed bottom-20 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
           title="Create Post"
           onClick={() => setShowCreatePostModal(true)}
         >
           +
+        </button>
+      )}
+      
+      {/* Floating Action Button for Create Reel */}
+      {token && !showCreateReelModal && currentView === 'reels' && (
+        <button
+          className="fixed bottom-20 right-6 z-50 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
+          title="Create Reel"
+          onClick={() => setShowCreateReelModal(true)}
+        >
+          🎬
         </button>
       )}
       {/* Create Post Modal */}
@@ -1232,6 +1487,26 @@ function App() {
           onCreate={handleCreatePostModal}
           uploading={uploadingPost}
           error={createPostError}
+        />
+      )}
+      
+      {/* Create Story Modal */}
+      {showCreateStoryModal && (
+        <CreateStoryModal
+          onClose={() => setShowCreateStoryModal(false)}
+          onCreate={handleCreateStory}
+          uploading={uploadingStory}
+          error={createStoryError}
+        />
+      )}
+      
+      {/* Create Reel Modal */}
+      {showCreateReelModal && (
+        <CreateReelModal
+          onClose={() => setShowCreateReelModal(false)}
+          onCreate={handleCreateReel}
+          uploading={uploadingReel}
+          error={createReelError}
         />
       )}
       {/* Profile menu content modal */}

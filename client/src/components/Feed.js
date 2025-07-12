@@ -1,5 +1,6 @@
 import React from 'react';
 import Post from '../Post';
+import Stories from './Stories';
 
 const Feed = ({
   posts,
@@ -12,7 +13,11 @@ const Feed = ({
   onDeleteComment,
   onToggleComments,
   onNavigateToProfile,
-  onPostClick
+  onPostClick,
+  stories,
+  onStoryView,
+  onCreateStory,
+  onDeleteStory
 }) => {
   if (!posts || posts.length === 0) {
     return (
@@ -25,6 +30,15 @@ const Feed = ({
   }
   return (
     <div className="space-y-6">
+      {/* Stories Section */}
+      <Stories
+        stories={stories || []}
+        onStoryView={onStoryView}
+        onCreateStory={onCreateStory}
+        onDeleteStory={onDeleteStory}
+        user={user}
+      />
+      
       {posts.map(post => (
         <Post
           key={post._id}

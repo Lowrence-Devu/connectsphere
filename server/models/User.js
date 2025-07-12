@@ -31,6 +31,36 @@ const UserSchema = new mongoose.Schema({
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isPrivate: { type: Boolean, default: false },
+  fcmToken: {
+    type: String,
+    default: null
+  },
+  notificationSettings: {
+    pushEnabled: {
+      type: Boolean,
+      default: true
+    },
+    likes: {
+      type: Boolean,
+      default: true
+    },
+    comments: {
+      type: Boolean,
+      default: true
+    },
+    follows: {
+      type: Boolean,
+      default: true
+    },
+    messages: {
+      type: Boolean,
+      default: true
+    },
+    videoCalls: {
+      type: Boolean,
+      default: true
+    }
+  }
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {

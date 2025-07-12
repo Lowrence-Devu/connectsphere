@@ -152,6 +152,15 @@ const Profile = ({
               >
                 Message
               </button>
+              <button
+                onClick={() => {
+                  // Video call functionality will be added here
+                  console.log('Video call to:', userProfile.username);
+                }}
+                className="ml-2 px-6 py-2 rounded-full font-medium transition-all duration-200 bg-purple-600 text-white hover:bg-purple-700"
+              >
+                📞 Call
+              </button>
             </>
           )}
         </div>

@@ -147,6 +147,46 @@ io.on('connection', (socket) => {
     io.to(String(to)).emit('call:ended', { from });
   });
 
+  // Video call room management
+  socket.on('join-call', (callId) => {
+    socket.join(callId);
+    console.log(`Socket ${socket.id} joined call room ${callId}`);
+  });
+  
+  socket.on('leave-call', (callId) => {
+    socket.leave(callId);
+    console.log(`Socket ${socket.id} left call room ${callId}`);
+  });
+  
+  // WebRTC signaling
+  socket.on('offer', (data) => {
+    socket.to(data.targetUserId).emit('offer', {
+      offer: data.offer,
+      callerId: data.callerId
+    });
+  });
+  
+  socket.on('answer', (data) => {
+    socket.to(data.targetUserId).emit('answer', {
+      answer: data.answer,
+      answererId: data.answererId
+    });
+  });
+  
+  socket.on('ice-candidate', (data) => {
+    socket.to(data.targetUserId).emit('ice-candidate', {
+      candidate: data.candidate,
+      fromUserId: data.fromUserId
+    });
+  });
+  
+  socket.on('call-ended', (data) => {
+    socket.to(data.targetUserId).emit('call-ended', {
+      callId: data.callId,
+      endedBy: data.endedBy
+    });
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
@@ -163,6 +203,10 @@ app.use('/api', require('./routes/comments'));
 app.use('/api', require('./routes/upload'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/messages', require('./routes/messages'));
+app.use('/api/stories', require('./routes/stories'));
+app.use('/api/reels', require('./routes/reels'));
+app.use('/api/video-calls', require('./routes/videoCalls'));
+app.use('/api/push-notifications', require('./routes/pushNotifications'));
 
 // Google OAuth routes (only if credentials are available)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
