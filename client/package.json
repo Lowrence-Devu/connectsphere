@@ -9,7 +9,7 @@
     "util": "util"
   },
   "dependencies": {
-    "@craco/craco": "^7.1.0",
+    "@craco/craco": "^5.9.0",
     "cra-template-pwa": "2.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

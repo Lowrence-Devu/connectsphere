@@ -107,7 +107,7 @@ const Post = ({
               className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Add a comment..."
               value={commentText}
-              onChange={e => onAddComment(undefined, e.target.value)}
+              onChange={e => onAddComment(post._id, e.target.value)}
             />
             <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Post</button>
           </form>

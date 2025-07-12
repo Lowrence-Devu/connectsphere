@@ -22,9 +22,12 @@ const io = socketIo(server, {
       'https://connectsphere-bice.vercel.app',
       'https://connectsphere-phi.vercel.app',
       'https://connectsphere-lowrences-projects-9eb17f85.vercel.app',
+      'https://connectsphere.vercel.app',
+      'https://connectsphere-git-main-lowrences-projects.vercel.app',
       'http://localhost:3000'
     ],
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
   }
 });
 
@@ -32,11 +35,15 @@ const io = socketIo(server, {
 app.use(cors({
   origin: [
     'https://connectsphere-bice.vercel.app',
-    'https://connectsphere-phi.vercel.app', // new Vercel domain
+    'https://connectsphere-phi.vercel.app',
     'https://connectsphere-lowrences-projects-9eb17f85.vercel.app',
+    'https://connectsphere.vercel.app',
+    'https://connectsphere-git-main-lowrences-projects.vercel.app',
     'http://localhost:3000'
   ],
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -92,10 +99,7 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log('MongoDB connected'))
 .catch((err) => console.error('MongoDB connection error:', err));
 

@@ -6,8 +6,6 @@ import PostModal from './components/PostModal';
 import CreatePostModal from './components/CreatePostModal';
 import Explore from './components/Explore';
 import DM from './components/DM';
-import Header from './components/Header';
-import { useLocation, useHistory } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -22,16 +20,13 @@ function App() {
   });
   const [posts, setPosts] = useState([]);
   const [text, setText] = useState('');
-  const [image, setImage] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [postsLoading, setPostsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
   const [comments, setComments] = useState({});
   const [commentText, setCommentText] = useState({});
   const [showComments, setShowComments] = useState({});
@@ -41,12 +36,10 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [currentView, setCurrentView] = useState('feed'); // 'feed', 'profile'
-  const [selectedUser, setSelectedUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [searchHistory, setSearchHistory] = useState(JSON.parse(localStorage.getItem('searchHistory') || '[]'));
-  const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     sortBy: 'username', // 'username', 'followers', 'recent'
     minFollowers: '',
@@ -281,13 +274,20 @@ function App() {
   const fetchPosts = async () => {
     setPostsLoading(true);
     try {
+      console.log('Fetching posts from:', `${API_URL}/posts`);
       const res = await fetch(`${API_URL}/posts`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
+      console.log('Posts fetched successfully:', data.length, 'posts');
       setPosts(data);
     } catch (err) {
-      console.error('Failed to fetch posts');
+      console.error('Failed to fetch posts:', err);
+      setError('Failed to load posts. Please check your connection.');
+    } finally {
+      setPostsLoading(false);
     }
-    setPostsLoading(false);
   };
 
   const fetchComments = async (postId) => {
@@ -416,13 +416,11 @@ function App() {
     setSearchResults([]);
     addToSearchHistory(user.username);
     await fetchUserProfile(user._id);
-    setSelectedUser(user);
     setCurrentView('profile');
   };
 
   const goBackToFeed = () => {
     setCurrentView('feed');
-    setSelectedUser(null);
     setUserProfile(null);
     setUserPosts([]);
   };
@@ -464,76 +462,7 @@ function App() {
     if (socket.current) socket.current.disconnect();
   };
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      setSelectedFile(file);
-    } else {
-      setError('Please select a valid image file');
-    }
-  };
 
-  const uploadImage = async () => {
-    if (!selectedFile) return null;
-    
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('image', selectedFile);
-    
-    try {
-      const res = await fetch(`${API_URL}/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const data = await res.json();
-      setUploading(false);
-      setSelectedFile(null);
-      return data.url;
-    } catch (err) {
-      setUploading(false);
-      setError('Failed to upload image');
-      return null;
-    }
-  };
-
-  const handleCreatePost = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    let imageUrl = '';
-    if (selectedFile) {
-      imageUrl = await uploadImage();
-      if (!imageUrl) {
-        setLoading(false);
-        return;
-      }
-    }
-    
-    try {
-      const res = await fetch(`${API_URL}/posts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ text, image: imageUrl }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setText('');
-        setImage('');
-        setSelectedFile(null);
-        // Real-time update handled by socket
-      } else {
-        setError(data.message || 'Failed to create post');
-      }
-    } catch (err) {
-      setError('Network error');
-    }
-    setLoading(false);
-  };
 
   const handleLike = async (postId) => {
     if (!token) return;
