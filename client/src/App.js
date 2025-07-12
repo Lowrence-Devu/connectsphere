@@ -1282,7 +1282,7 @@ function App() {
             inbox={inbox}
             activeChat={activeChat}
             messages={messages}
-            onSelectChat={setActiveChat}
+            onSelectChat={userObj => setActiveChat(userObj)}
             onSendMessage={handleSendMessage}
             messageText={messageText}
             setMessageText={setMessageText}

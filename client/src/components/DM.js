@@ -62,30 +62,56 @@ const DM = ({
           {inbox.length === 0 ? (
             <div className="p-4 text-gray-400 dark:text-gray-500 text-center">No conversations yet.</div>
           ) : (
-            inbox.map(chatUser => (
-              <div
-                key={chatUser._id}
-                className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                onClick={() => {
-                  onSelectChat(chatUser);
-                  setMobileView('chat'); // Always set to 'chat' on user select (fix for mobile)
-                }}
-              >
+            inbox.map(convo => {
+              const chatUser = convo.user;
+              const lastMessage = convo.lastMessage;
+              const unread = convo.unread;
+              return (
                 <div
-                  className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden mr-3"
-                  onClick={e => { e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); }}
-                  title="View profile"
-                  style={{ cursor: 'pointer' }}
+                  key={chatUser._id}
+                  className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  onClick={() => {
+                    onSelectChat(chatUser);
+                    setMobileView('chat');
+                  }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectChat(chatUser); setMobileView('chat'); } }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open chat with ${chatUser.username}`}
                 >
-                  {chatUser.profileImage ? (
-                    <img src={chatUser.profileImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    <span className="text-white font-bold text-lg">{chatUser.username?.charAt(0).toUpperCase()}</span>
-                  )}
+                  <div
+                    className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden mr-3 shadow-md border-2 border-white dark:border-gray-900"
+                    onClick={e => { e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); } }}
+                    title="View profile"
+                    style={{ cursor: 'pointer' }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View ${chatUser.username}'s profile`}
+                  >
+                    {chatUser.profileImage ? (
+                      <img src={chatUser.profileImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                      <span className="text-white font-bold text-lg">{chatUser.username?.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-900 dark:text-white truncate">{chatUser.username}</span>
+                      {unread > 0 && (
+                        <span className="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 font-semibold shadow-lg animate-pulse" aria-label={`${unread} unread messages`}>{unread}</span>
+                      )}
+                    </div>
+                    {lastMessage && (
+                      <div className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[180px] font-medium mt-0.5">
+                        <span className="font-semibold text-blue-500 dark:text-blue-400">{lastMessage.sender && lastMessage.sender.username ? `${lastMessage.sender.username}: ` : ''}</span>
+                        <span>{lastMessage.text}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <span className="font-medium text-gray-900 dark:text-white">{chatUser.username}</span>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -97,6 +123,7 @@ const DM = ({
               <button
                 className="mr-2 px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white sm:hidden"
                 onClick={() => setMobileView('sidebar')}
+                aria-label="Back to inbox"
               >
                 ← Back
               </button>
@@ -119,6 +146,7 @@ const DM = ({
                   className="ml-2 p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 transition"
                   title="Voice Call"
                   onClick={() => startCall('voice')}
+                  aria-label="Start voice call"
                 >
                   <span role="img" aria-label="Voice Call">📞</span>
                 </button>
@@ -126,6 +154,7 @@ const DM = ({
                   className="ml-2 p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 transition"
                   title="Video Call"
                   onClick={() => startCall('video')}
+                  aria-label="Start video call"
                 >
                   <span role="img" aria-label="Video Call">🎥</span>
                 </button>
@@ -141,11 +170,16 @@ const DM = ({
                   messages.map((msg, idx) => (
                     <div
                       key={msg._id || idx}
-                      className={`flex ${msg.sender._id === user._id ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${msg.sender._id === user._id ? 'justify-end' : 'justify-start'} group`}
                     >
-                      <div className={`max-w-xs px-4 py-2 rounded-2xl shadow text-sm ${msg.sender._id === user._id ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-none'}`}>
-                        <div>{msg.text}</div>
-                        <div className="text-xs text-gray-300 dark:text-gray-400 mt-1 text-right">
+                      <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-md text-sm transition-all duration-200
+                        ${msg.sender._id === user._id
+                          ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-br-none'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none border border-gray-200 dark:border-gray-700'}
+                        group-hover:scale-105 group-hover:shadow-lg
+                      `}>
+                        <div className="break-words whitespace-pre-line">{msg.text}</div>
+                        <div className="text-xs text-gray-300 dark:text-gray-400 mt-1 text-right select-none">
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
