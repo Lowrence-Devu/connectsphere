@@ -26,6 +26,7 @@ function App() {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [postsLoading, setPostsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState(null);
   const [comments, setComments] = useState({});
   const [commentText, setCommentText] = useState({});
@@ -40,6 +41,7 @@ function App() {
   const [userPosts, setUserPosts] = useState([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [searchHistory, setSearchHistory] = useState(JSON.parse(localStorage.getItem('searchHistory') || '[]'));
+  const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     sortBy: 'username', // 'username', 'followers', 'recent'
     minFollowers: '',
