@@ -150,9 +150,9 @@ const DM = ({
   }, [stream, remoteStream, callType]);
 
   return (
-    <div className="flex h-[70vh] bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="flex flex-col sm:flex-row h-[70vh] bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
       {/* Sidebar: Inbox */}
-      <div className="w-1/3 min-w-[180px] max-w-xs border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
+      <div className="w-full sm:w-1/3 min-w-[180px] max-w-xs border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
         <div className="p-4 font-bold text-lg text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700">Inbox</div>
         {inbox.length === 0 ? (
           <div className="p-4 text-gray-400 dark:text-gray-500 text-center">No conversations yet.</div>
@@ -181,7 +181,7 @@ const DM = ({
         )}
       </div>
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col w-full">
         {activeChat ? (
           <>
             <div className="flex items-center space-x-3 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">

@@ -86,7 +86,7 @@ const Stories = ({
   return (
     <div className="mb-6">
       {/* Stories Bar */}
-      <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+      <div className="flex space-x-3 sm:space-x-4 overflow-x-auto pb-4 scrollbar-hide px-1 sm:px-0">
         {/* Create Story Button */}
         <div className="flex flex-col items-center space-y-2">
           <button

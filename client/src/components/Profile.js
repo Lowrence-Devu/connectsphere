@@ -25,10 +25,10 @@ const Profile = ({
 }) => {
   if (!userProfile) return null;
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-2 sm:px-0">
       {/* Profile Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center space-x-4 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-center sm:space-x-4 space-y-4 sm:space-y-0 mb-4">
           <div className="w-20 h-20 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 overflow-hidden">
             {userProfile.profileImage ? (
               <img
@@ -175,7 +175,7 @@ const Profile = ({
             <p className="text-gray-500 dark:text-gray-400">This user hasn't shared anything yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 md:gap-4 mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-4 mt-6">
             {userPosts.map(post => (
               <div
                 key={post._id}

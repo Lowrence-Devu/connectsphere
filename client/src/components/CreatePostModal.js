@@ -29,7 +29,7 @@ function CreatePostModal({ onClose, onCreate, uploading, error }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 w-full max-w-xs sm:max-w-md relative">
         <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={onClose}>
           ✕
         </button>
