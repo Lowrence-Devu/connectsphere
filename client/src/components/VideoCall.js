@@ -131,16 +131,24 @@ const VideoCall = ({ user, activeChat, onClose }) => {
           <div className="flex flex-col items-center space-y-6">
             {/* Video/Audio Display */}
             <div className="relative w-full max-w-2xl">
+              {/* In the video call UI, always show the local video/audio element, even if remoteStream is not available */}
+              {/* For video calls: */}
               {callType === 'video' ? (
                 <div className="relative">
-                  {/* Remote Video */}
-                  <video
-                    ref={remoteVideoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full h-64 md:h-96 rounded-lg bg-gray-900"
-                  />
-                  {/* Local Video (Picture-in-Picture) */}
+                  {/* Remote Video or Waiting Placeholder */}
+                  {remoteStream ? (
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-64 md:h-96 rounded-lg bg-gray-900"
+                    />
+                  ) : (
+                    <div className="w-full h-64 md:h-96 rounded-lg bg-gray-900 flex items-center justify-center text-white text-lg">
+                      Waiting for other user to join...
+                    </div>
+                  )}
+                  {/* Local Video (Picture-in-Picture) - Always show */}
                   <div className="absolute top-4 right-4">
                     <video
                       ref={localVideoRef}
@@ -162,7 +170,7 @@ const VideoCall = ({ user, activeChat, onClose }) => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center space-y-4">
-                  {/* Hidden audio elements for voice calls */}
+                  {/* Hidden audio elements for voice calls - Always attach local audio */}
                   <audio ref={localAudioRef} autoPlay muted />
                   <audio ref={remoteAudioRef} autoPlay />
                   
@@ -173,6 +181,11 @@ const VideoCall = ({ user, activeChat, onClose }) => {
                     <p className="text-lg font-medium text-gray-800 dark:text-white">
                       Voice Call with {activeChat?.username}
                     </p>
+                    {!remoteStream && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        Waiting for other user to join...
+                      </p>
+                    )}
                     {connectionStatus !== 'connected' && (
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                         {getConnectionStatusText()}

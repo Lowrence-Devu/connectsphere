@@ -82,9 +82,85 @@ export const useVideoCall = (user, activeChat) => {
     }
   }, [stream]);
 
+  // Add debug logs for all socket signaling and ICE events
+  useEffect(() => {
+    if (!user?._id) return;
+
+    socket.emit('join', user._id);
+
+    socket.on('call:incoming', ({ from, callType }) => {
+      console.log('[Socket] Incoming call from:', from, 'type:', callType);
+      setIncomingCall({ from, callType });
+      if (ringtoneRef.current) {
+        ringtoneRef.current.play().catch(err => console.log('Ringtone play failed:', err));
+      }
+    });
+
+    socket.on('call:accepted', ({ from }) => {
+      console.log('[Socket] Call accepted by:', from);
+      if (peer) {
+        peer.signal(peer._lastOffer);
+        setConnectionStatus('connected');
+      }
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+    });
+
+    socket.on('call:signal', ({ from, signal }) => {
+      console.log('[Socket] Received signal from:', from, signal);
+      if (peer) {
+        try {
+          peer.signal(signal);
+          setConnectionStatus('connected');
+        } catch (err) {
+          console.error('[Socket] Error signaling peer:', err);
+        }
+      }
+    });
+
+    socket.on('call:ended', ({ from }) => {
+      console.log('[Socket] Call ended by:', from);
+      endCall();
+      if (callEndRef.current) {
+        callEndRef.current.play().catch(err => console.log('Call end sound failed:', err));
+      }
+    });
+
+    socket.on('ice-candidate', ({ from, candidate }) => {
+      console.log('[Socket] ICE candidate from:', from, candidate);
+      if (peer && (from === (activeChat?._id || incomingCall?.from))) {
+        try {
+          peer.signal({ type: 'candidate', candidate });
+        } catch (err) {
+          console.error('[Socket] Error handling ICE candidate:', err);
+        }
+      }
+    });
+
+    return () => {
+      socket.off('call:incoming');
+      socket.off('call:accepted');
+      socket.off('call:signal');
+      socket.off('call:ended');
+      socket.off('ice-candidate');
+    };
+  }, [user?._id, peer, activeChat, incomingCall]);
+
+  // Add error handling for missing tracks or failed stream attachment
   useEffect(() => {
     if (remoteStream) {
-      console.log('Remote stream tracks:', remoteStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+      const audioTracks = remoteStream.getAudioTracks();
+      const videoTracks = remoteStream.getVideoTracks();
+      if (audioTracks.length === 0 && videoTracks.length === 0) {
+        console.warn('[Stream] Remote stream has no audio or video tracks!');
+      } else {
+        console.log('[Stream] Remote stream tracks:', {
+          audio: audioTracks.map(t => t.enabled),
+          video: videoTracks.map(t => t.enabled)
+        });
+      }
     }
   }, [remoteStream]);
 
@@ -101,80 +177,6 @@ export const useVideoCall = (user, activeChat) => {
   // Ensure both users always add their local audio stream to the Peer (already done, but add comments and logs)
   // In startCall and acceptCall, after setStream(localStream):
   // console.log('Adding local stream to Peer:', localStream);
-
-  // Socket event listeners
-  useEffect(() => {
-    if (!user?._id) return;
-    
-    socket.emit('join', user._id);
-    
-    // Enhanced incoming call handling with ring sound
-    socket.on('call:incoming', ({ from, callType }) => {
-      console.log('Incoming call from:', from, 'type:', callType);
-      setIncomingCall({ from, callType });
-      // Play ringtone
-      if (ringtoneRef.current) {
-        ringtoneRef.current.play().catch(err => console.log('Ringtone play failed:', err));
-      }
-    });
-    
-    // Enhanced call acceptance
-    socket.on('call:accepted', ({ from }) => {
-      console.log('Call accepted by:', from);
-      if (peer) {
-        peer.signal(peer._lastOffer);
-        setConnectionStatus('connected');
-      }
-      // Stop ringtone
-      if (ringtoneRef.current) {
-        ringtoneRef.current.pause();
-        ringtoneRef.current.currentTime = 0;
-      }
-    });
-    
-    // Enhanced signal handling - FIXED: Proper signal handling
-    socket.on('call:signal', ({ from, signal }) => {
-      console.log('Received signal from:', from);
-      if (peer) {
-        try {
-          peer.signal(signal);
-          setConnectionStatus('connected');
-        } catch (err) {
-          console.error('Error signaling peer:', err);
-        }
-      }
-    });
-    
-    // Enhanced call ending
-    socket.on('call:ended', ({ from }) => {
-      console.log('Call ended by:', from);
-      endCall();
-      // Play call end sound
-      if (callEndRef.current) {
-        callEndRef.current.play().catch(err => console.log('Call end sound failed:', err));
-      }
-    });
-    
-    // ICE candidate handling for better connection - FIXED: Proper ICE handling
-    socket.on('ice-candidate', ({ from, candidate }) => {
-      console.log('ICE candidate from:', from);
-      if (peer && from === (activeChat?._id || incomingCall?.from)) {
-        try {
-          peer.signal({ type: 'candidate', candidate });
-        } catch (err) {
-          console.error('Error handling ICE candidate:', err);
-        }
-      }
-    });
-    
-    return () => {
-      socket.off('call:incoming');
-      socket.off('call:accepted');
-      socket.off('call:signal');
-      socket.off('call:ended');
-      socket.off('ice-candidate');
-    };
-  }, [user?._id, peer, activeChat, incomingCall]);
 
   // Call duration timer
   useEffect(() => {

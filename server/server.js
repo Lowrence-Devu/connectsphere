@@ -154,21 +154,10 @@ io.on('connection', (socket) => {
     io.to(String(to)).emit('call:ended', { from });
   });
   
-  // Enhanced ICE candidate handling
+  // Single ICE candidate handler for all WebRTC flows
   socket.on('ice-candidate', ({ to, from, candidate }) => {
     console.log(`ICE candidate from ${from} to ${to}`);
     io.to(String(to)).emit('ice-candidate', { from, candidate });
-  });
-  
-  // Handle ICE candidates from simple-peer
-  socket.on('ice-candidate', (data) => {
-    if (data.to && data.from && data.candidate) {
-      console.log(`ICE candidate from ${data.from} to ${data.to}`);
-      io.to(String(data.to)).emit('ice-candidate', { 
-        from: data.from, 
-        candidate: data.candidate 
-      });
-    }
   });
 
   // Video call room management
@@ -196,14 +185,6 @@ io.on('connection', (socket) => {
     io.to(String(data.targetUserId)).emit('answer', {
       answer: data.answer,
       answererId: data.answererId
-    });
-  });
-  
-  socket.on('ice-candidate', (data) => {
-    // Emit to the target user's room
-    io.to(String(data.targetUserId)).emit('ice-candidate', {
-      candidate: data.candidate,
-      fromUserId: data.fromUserId
     });
   });
   
