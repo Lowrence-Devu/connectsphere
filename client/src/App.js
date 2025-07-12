@@ -173,6 +173,12 @@ function App() {
   
   // Add app initialization state
   const [appInitialized, setAppInitialized] = useState(false);
+  
+  // Video call state
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
+  const [globalCallActive, setGlobalCallActive] = useState(false);
+  const [globalCalling, setGlobalCalling] = useState(false);
 
   useEffect(() => {
     // Initialize app
@@ -1047,11 +1053,6 @@ function App() {
     setEditEmail(user?.email || '');
     setEditIsPrivate(user?.isPrivate || false);
   }, [user]);
-
-  const [showVideoCall, setShowVideoCall] = useState(false);
-  const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
-  const [globalCallActive, setGlobalCallActive] = useState(false);
-  const [globalCalling, setGlobalCalling] = useState(false);
 
   if (!token) {
     return (
