@@ -41,6 +41,22 @@ const VideoCallDebug = ({
       
       <div className="space-y-2">
         <div>
+          <strong>Environment:</strong> {process.env.NODE_ENV}
+        </div>
+        
+        <div>
+          <strong>API URL:</strong> {process.env.REACT_APP_API_URL || 'Not set'}
+        </div>
+        
+        <div>
+          <strong>Hostname:</strong> {window.location.hostname}
+        </div>
+        
+        <div>
+          <strong>Protocol:</strong> {window.location.protocol}
+        </div>
+        
+        <div>
           <strong>Call Type:</strong> {callType}
         </div>
         
@@ -137,6 +153,13 @@ const VideoCallDebug = ({
           </div>
           <div className="ml-2">
             RTT: {navigator.connection?.rtt || 'Unknown'} ms
+          </div>
+        </div>
+        
+        <div className="border-t border-gray-600 pt-2">
+          <strong>Socket Status:</strong>
+          <div className="ml-2">
+            Connected: {window.socketConnected ? '✅' : '❌'}
           </div>
         </div>
       </div>

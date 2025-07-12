@@ -142,14 +142,51 @@ function App() {
   useEffect(() => {
     fetchPosts();
     if (token) {
-      // Initialize Socket.IO connection
-      socket.current = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000');
+      // Enhanced Socket.IO connection with better error handling
+      const getSocketUrl = () => {
+        const apiUrl = process.env.REACT_APP_API_URL;
+        console.log('[App] API URL:', apiUrl);
+        
+        if (apiUrl) {
+          const socketUrl = apiUrl.replace('/api', '');
+          console.log('[App] Using socket URL:', socketUrl);
+          return socketUrl;
+        }
+        
+        // Fallback for production
+        if (window.location.hostname !== 'localhost') {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const socketUrl = `${protocol}//${window.location.hostname}`;
+          console.log('[App] Using fallback socket URL:', socketUrl);
+          return socketUrl;
+        }
+        
+        console.log('[App] Using localhost fallback');
+        return 'http://localhost:5000';
+      };
+      
+      socket.current = io(getSocketUrl(), {
+        transports: ['websocket', 'polling'],
+        timeout: 20000,
+        forceNew: true
+      });
       
       socket.current.on('connect', () => {
-        console.log('Connected to server');
+        console.log('[App] Connected to server successfully');
+        window.socketConnected = true;
         if (user?._id) {
           socket.current.emit('join', user._id);
         }
+      });
+      
+      socket.current.on('connect_error', (error) => {
+        console.error('[App] Socket connection error:', error);
+        window.socketConnected = false;
+      });
+      
+      socket.current.on('disconnect', (reason) => {
+        console.log('[App] Socket disconnected:', reason);
+        window.socketConnected = false;
       });
       
       socket.current.on('newPost', (post) => {

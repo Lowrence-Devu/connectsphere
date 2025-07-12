@@ -3,7 +3,47 @@ import Peer from 'simple-peer';
 import io from 'socket.io-client';
 import { usePushNotifications } from './usePushNotifications';
 
-const socket = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000');
+// Enhanced socket connection with better error handling
+const getSocketUrl = () => {
+  const apiUrl = process.env.REACT_APP_API_URL;
+  console.log('[Socket] API URL:', apiUrl);
+  
+  if (apiUrl) {
+    const socketUrl = apiUrl.replace('/api', '');
+    console.log('[Socket] Using socket URL:', socketUrl);
+    return socketUrl;
+  }
+  
+  // Fallback for production
+  if (window.location.hostname !== 'localhost') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socketUrl = `${protocol}//${window.location.hostname}`;
+    console.log('[Socket] Using fallback socket URL:', socketUrl);
+    return socketUrl;
+  }
+  
+  console.log('[Socket] Using localhost fallback');
+  return 'http://localhost:5000';
+};
+
+const socket = io(getSocketUrl(), {
+  transports: ['websocket', 'polling'],
+  timeout: 20000,
+  forceNew: true
+});
+
+// Add socket connection debugging
+socket.on('connect', () => {
+  console.log('[Socket] Connected successfully');
+});
+
+socket.on('connect_error', (error) => {
+  console.error('[Socket] Connection error:', error);
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('[Socket] Disconnected:', reason);
+});
 
 export const useVideoCall = (user, activeChat) => {
   const [callType, setCallType] = useState(null); // 'voice' | 'video' | null
