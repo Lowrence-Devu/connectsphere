@@ -39,9 +39,20 @@ export const useVideoCall = (user, activeChat) => {
       gainNode.connect(audioContext.destination);
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
       gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      let started = false;
       ringtoneRef.current = {
-        play: () => oscillator.start(),
-        pause: () => oscillator.stop(),
+        play: () => {
+          if (!started) {
+            oscillator.start();
+            started = true;
+          }
+        },
+        pause: () => {
+          if (started) {
+            try { oscillator.stop(); } catch (e) {}
+            started = false;
+          }
+        },
         currentTime: 0,
         oscillator
       };
