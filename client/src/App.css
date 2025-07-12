@@ -36,12 +36,20 @@ body.dark {
 }
 
 .header-content {
-  max-width: 600px;
-  margin: 0 auto;
+  width: 100vw;
+  max-width: 100vw;
+  margin: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .header-content {
+    max-width: 600px;
+    margin: 0 auto;
+  }
 }
 
 .logo {
@@ -75,11 +83,18 @@ body.dark {
 /* Main Content */
 .main-content {
   flex: 1;
-  max-width: 600px;
-  margin: 0 auto;
-  width: 100%;
+  width: 100vw;
+  max-width: 100vw;
+  margin: 0;
   padding: 1rem;
   overflow-y: auto;
+}
+
+@media (min-width: 640px) {
+  .main-content {
+    max-width: 600px;
+    margin: 0 auto;
+  }
 }
 
 /* Home Container */
