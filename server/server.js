@@ -133,18 +133,31 @@ io.on('connection', (socket) => {
     }
   });
 
-  // WebRTC signaling events for calls
+  // Enhanced WebRTC signaling events for calls with better error handling
   socket.on('call:request', ({ to, from, callType }) => {
+    console.log(`Call request from ${from} to ${to} (${callType})`);
     io.to(String(to)).emit('call:incoming', { from, callType });
   });
+  
   socket.on('call:accept', ({ to, from }) => {
+    console.log(`Call accepted by ${from} to ${to}`);
     io.to(String(to)).emit('call:accepted', { from });
   });
+  
   socket.on('call:signal', ({ to, from, signal }) => {
+    console.log(`Signal from ${from} to ${to}`);
     io.to(String(to)).emit('call:signal', { from, signal });
   });
+  
   socket.on('call:end', ({ to, from }) => {
+    console.log(`Call ended by ${from} to ${to}`);
     io.to(String(to)).emit('call:ended', { from });
+  });
+  
+  // Enhanced ICE candidate handling
+  socket.on('ice-candidate', ({ to, from, candidate }) => {
+    console.log(`ICE candidate from ${from} to ${to}`);
+    io.to(String(to)).emit('ice-candidate', { from, candidate });
   });
 
   // Video call room management

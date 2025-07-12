@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Peer from 'simple-peer';
-import io from 'socket.io-client';
-
-const socket = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000');
+import { useVideoCall } from '../hooks/useVideoCall';
+import VideoCall from './VideoCall';
 
 const DM = ({
   inbox = [],
@@ -16,16 +14,20 @@ const DM = ({
   chatLoading,
   onNavigateToProfile
 }) => {
-  const [callType, setCallType] = useState(null); // 'voice' | 'video' | null
-  const [callActive, setCallActive] = useState(false);
-  const [incomingCall, setIncomingCall] = useState(null); // { from, callType }
-  const [peer, setPeer] = useState(null);
-  const [stream, setStream] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null);
-  const localVideoRef = useRef();
-  const remoteVideoRef = useRef();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [mobileView, setMobileView] = useState('sidebar'); // 'sidebar' | 'chat'
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  
+  // Use the enhanced video call hook
+  const {
+    callType,
+    callActive,
+    incomingCall,
+    startCall,
+    acceptCall,
+    declineCall,
+    endCall
+  } = useVideoCall(user, activeChat);
 
   useEffect(() => {
     const handleResize = () => {
@@ -42,129 +44,14 @@ const DM = ({
     }
   }, [isMobile, activeChat]);
 
+  // Handle call state changes
   useEffect(() => {
-    if (!user?._id) return;
-    socket.emit('join', user._id);
-    // Listen for incoming call
-    socket.on('call:incoming', ({ from, callType }) => {
-      setIncomingCall({ from, callType });
-    });
-    socket.on('call:accepted', ({ from }) => {
-      if (peer) peer.signal(peer._lastOffer);
-    });
-    socket.on('call:signal', ({ from, signal }) => {
-      if (peer) peer.signal(signal);
-    });
-    socket.on('call:ended', ({ from }) => {
-      endCall();
-    });
-    return () => {
-      socket.off('call:incoming');
-      socket.off('call:accepted');
-      socket.off('call:signal');
-      socket.off('call:ended');
-    };
-    // eslint-disable-next-line
-  }, [user?._id, peer]);
-
-  const startCall = async (type) => {
-    setCallType(type);
-    setCallActive(true);
-    const media = type === 'video'
-      ? { video: true, audio: true }
-      : { video: false, audio: true };
-    const localStream = await navigator.mediaDevices.getUserMedia(media);
-    setStream(localStream);
-    const newPeer = new Peer({
-      initiator: true,
-      trickle: false,
-      stream: localStream
-    });
-    newPeer.on('signal', (signal) => {
-      newPeer._lastOffer = signal;
-      socket.emit('call:request', {
-        to: activeChat._id,
-        from: user._id,
-        callType: type
-      });
-      socket.emit('call:signal', {
-        to: activeChat._id,
-        from: user._id,
-        signal
-      });
-    });
-    newPeer.on('stream', (remote) => {
-      setRemoteStream(remote);
-    });
-    setPeer(newPeer);
-    if (localVideoRef.current && type === 'video') {
-      localVideoRef.current.srcObject = localStream;
+    if (callActive || incomingCall) {
+      setShowVideoCall(true);
+    } else {
+      setShowVideoCall(false);
     }
-  };
-
-  const acceptCall = async () => {
-    setCallType(incomingCall.callType);
-    setCallActive(true);
-    setIncomingCall(null);
-    const media = incomingCall.callType === 'video'
-      ? { video: true, audio: true }
-      : { video: false, audio: true };
-    const localStream = await navigator.mediaDevices.getUserMedia(media);
-    setStream(localStream);
-    const newPeer = new Peer({
-      initiator: false,
-      trickle: false,
-      stream: localStream
-    });
-    newPeer.on('signal', (signal) => {
-      socket.emit('call:signal', {
-        to: incomingCall.from,
-        from: user._id,
-        signal
-      });
-    });
-    newPeer.on('stream', (remote) => {
-      setRemoteStream(remote);
-    });
-    setPeer(newPeer);
-    socket.emit('call:accept', {
-      to: incomingCall.from,
-      from: user._id
-    });
-    if (localVideoRef.current && incomingCall.callType === 'video') {
-      localVideoRef.current.srcObject = localStream;
-    }
-  };
-
-  const declineCall = () => {
-    setIncomingCall(null);
-    socket.emit('call:end', {
-      to: incomingCall.from,
-      from: user._id
-    });
-  };
-
-  const endCall = () => {
-    setCallActive(false);
-    setCallType(null);
-    setRemoteStream(null);
-    setStream(null);
-    if (peer) peer.destroy();
-    setPeer(null);
-    socket.emit('call:end', {
-      to: activeChat?._id || (incomingCall && incomingCall.from),
-      from: user._id
-    });
-  };
-
-  useEffect(() => {
-    if (localVideoRef.current && stream && callType === 'video') {
-      localVideoRef.current.srcObject = stream;
-    }
-    if (remoteVideoRef.current && remoteStream && callType === 'video') {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
-  }, [stream, remoteStream, callType]);
+  }, [callActive, incomingCall]);
 
   return (
     <div className="flex flex-col sm:flex-row h-[70vh] bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
@@ -282,61 +169,13 @@ const DM = ({
                   Send
                 </button>
               </form>
-              {/* Call Modal */}
-              {callActive && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative flex flex-col items-center">
-                    <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={endCall}>
-                      ✕
-                    </button>
-                    <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">{callType === 'voice' ? 'Voice Call' : 'Video Call'}</h2>
-                    <div className="mb-4 flex flex-col items-center">
-                      {callType === 'video' ? (
-                        <>
-                          <video ref={localVideoRef} autoPlay muted playsInline className="w-32 h-32 rounded-lg mb-2 border-2 border-blue-400" />
-                          <video ref={remoteVideoRef} autoPlay playsInline className="w-40 h-40 rounded-lg border-2 border-green-400" />
-                        </>
-                      ) : (
-                        <>
-                          <audio ref={localVideoRef} autoPlay muted />
-                          <audio ref={remoteVideoRef} autoPlay />
-                          <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-4xl text-blue-600 dark:text-blue-300">🎤</div>
-                        </>
-                      )}
-                    </div>
-                    <button
-                      className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition"
-                      onClick={endCall}
-                    >
-                      Hang Up
-                    </button>
-                  </div>
-                </div>
-              )}
-              {/* Incoming Call Modal */}
-              {incomingCall && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-xs relative flex flex-col items-center">
-                    <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Incoming {incomingCall.callType === 'voice' ? 'Voice' : 'Video'} Call</h2>
-                    <div className="mb-4">
-                      <span className="text-4xl">{incomingCall.callType === 'voice' ? '📞' : '🎥'}</span>
-                    </div>
-                    <div className="flex space-x-4">
-                      <button
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
-                        onClick={acceptCall}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition"
-                        onClick={declineCall}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              {/* Enhanced Video Call Component */}
+              {showVideoCall && (
+                <VideoCall
+                  user={user}
+                  activeChat={activeChat}
+                  onClose={() => setShowVideoCall(false)}
+                />
               )}
             </>
           ) : (
