@@ -13,7 +13,7 @@ const Explore = ({ posts, onPostClick, onSearch }) => {
       <form onSubmit={handleSearch} className="mb-6 flex justify-center">
         <input
           type="text"
-          className="w-full max-w-md px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          className="w-full sm:max-w-md px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           placeholder="Search users or hashtags..."
           value={search}
           onChange={e => setSearch(e.target.value)}

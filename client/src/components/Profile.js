@@ -55,7 +55,7 @@ const Profile = ({
           </div>
           {userProfile._id === user?._id ? (
             editingProfile ? (
-              <form className="space-y-4 w-full max-w-md" onSubmit={handleEditProfile}>
+              <form className="space-y-4 w-full sm:max-w-md" onSubmit={handleEditProfile}>
                 <div className="flex flex-col items-center mb-4">
                   <label className="relative cursor-pointer group">
                     <img
