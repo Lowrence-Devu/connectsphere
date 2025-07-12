@@ -448,10 +448,11 @@ function App() {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
       } else {
-        setError(data.message || 'Auth failed');
+        setError(data.message || 'Authentication failed. Please check your credentials.');
       }
     } catch (err) {
-      setError('Network error');
+      console.error('Auth error:', err);
+      setError('Network error. Please check your connection and try again.');
     }
     setLoading(false);
   };
@@ -1083,7 +1084,6 @@ function App() {
             </div>
           ) : userProfile ? (
             <>
-              {console.log('Profile debug:', { userProfile, userPosts })}
               <Profile
                 userProfile={userProfile}
                 userPosts={userPosts}
