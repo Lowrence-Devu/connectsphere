@@ -13,6 +13,61 @@ import VideoCall from './components/VideoCall';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+// Add debugging for environment variables
+console.log('[App] Environment check:', {
+  NODE_ENV: process.env.NODE_ENV,
+  REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+  API_URL: API_URL,
+  windowLocation: window.location.href
+});
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('[App] Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg max-w-md">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              The app encountered an error. Please refresh the page to try again.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Refresh Page
+            </button>
+            {process.env.NODE_ENV === 'development' && (
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-gray-500">Error Details</summary>
+                <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto">
+                  {this.state.error?.toString()}
+                </pre>
+              </details>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 
 function App() {
   const socket = useRef(null);
@@ -88,6 +143,27 @@ function App() {
 
   // Add hooks for handling Google OAuth redirect
   const location = window.location;
+  
+  // Add app initialization state
+  const [appInitialized, setAppInitialized] = useState(false);
+
+  useEffect(() => {
+    // Initialize app
+    const initializeApp = async () => {
+      try {
+        console.log('[App] Initializing application...');
+        // Add a small delay to ensure all state is properly set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setAppInitialized(true);
+        console.log('[App] Application initialized successfully');
+      } catch (error) {
+        console.error('[App] Initialization error:', error);
+        setAppInitialized(true); // Still set to true to prevent infinite loading
+      }
+    };
+    
+    initializeApp();
+  }, []);
 
   useEffect(() => {
     // Check for token in URL (after Google OAuth)
@@ -1047,703 +1123,714 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      {/* Header Navigation */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 backdrop-blur-sm bg-white/95 dark:bg-gray-800/95">
-        <div className="max-w-2xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                ConnectSphere
-              </h1>
-            </div>
+    <ErrorBoundary>
+      {!appInitialized ? (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-300">Loading ConnectSphere...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+        {/* Header Navigation */}
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 backdrop-blur-sm bg-white/95 dark:bg-gray-800/95">
+          <div className="max-w-2xl mx-auto px-4">
+            <div className="flex items-center justify-between h-16">
+              {/* Logo */}
+              <div className="flex items-center space-x-4">
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  ConnectSphere
+                </h1>
+              </div>
 
-            {/* Navigation */}
-            <div className="flex items-center space-x-4">
-              {/* Search */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setShowSearch(true)}
-                  className="w-64 px-4 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {showSearch && (searchQuery.trim() || searchResults.length > 0 || showFilters) && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                    {searching ? (
-                      <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                        <p className="text-sm">Searching...</p>
-                      </div>
-                    ) : searchResults.length > 0 ? (
-                      <div className="py-2">
-                        {searchResults.map(user => (
-                          <div
-                            key={user._id}
-                            className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer"
-                            onClick={e => { e.stopPropagation(); navigateToProfile(user); setShowSearch(false); }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden">
-                                {user.profileImage ? (
-                                  <img src={user.profileImage} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
-                                ) : (
-                                  <span className="text-white font-bold text-lg">{user.username?.charAt(0).toUpperCase()}</span>
-                                )}
-                              </div>
-                              <span className="font-medium text-gray-900 dark:text-white">{user.username}</span>
-                            </div>
-                            {user._id !== user?.id && (
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  const isFollowing = user.followers?.includes(user?.id);
-                                  if (isFollowing) {
-                                    unfollowUser(user._id);
-                                  } else {
-                                    followUser(user._id);
-                                  }
-                                }}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                                  user.followers?.includes(user?.id)
-                                    ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                              >
-                                {user.followers?.includes(user?.id) ? 'Unfollow' : 'Follow'}
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : searchQuery.trim() && searchQuery.length >= 2 ? (
-                      <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-                        No users found
-                      </div>
-                    ) : searchHistory.length > 0 ? (
-                      <div className="py-2">
-                        <div className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          Recent Searches
+              {/* Navigation */}
+              <div className="flex items-center space-x-4">
+                {/* Search */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setShowSearch(true)}
+                    className="w-64 px-4 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {showSearch && (searchQuery.trim() || searchResults.length > 0 || showFilters) && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                      {searching ? (
+                        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                          <p className="text-sm">Searching...</p>
                         </div>
-                        {searchHistory.map((query, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                            onClick={() => setSearchQuery(query)}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <span className="text-gray-400 dark:text-gray-500">🕒</span>
-                              <span className="text-gray-700 dark:text-gray-300">{query}</span>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const newHistory = searchHistory.filter((_, i) => i !== index);
-                                setSearchHistory(newHistory);
-                                localStorage.setItem('searchHistory', JSON.stringify(newHistory));
-                              }}
-                              className="text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                      ) : searchResults.length > 0 ? (
+                        <div className="py-2">
+                          {searchResults.map(user => (
+                            <div
+                              key={user._id}
+                              className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer"
+                              onClick={e => { e.stopPropagation(); navigateToProfile(user); setShowSearch(false); }}
                             >
-                              ✕
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden">
+                                  {user.profileImage ? (
+                                    <img src={user.profileImage} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+                                  ) : (
+                                    <span className="text-white font-bold text-lg">{user.username?.charAt(0).toUpperCase()}</span>
+                                  )}
+                                </div>
+                                <span className="font-medium text-gray-900 dark:text-white">{user.username}</span>
+                              </div>
+                              {user._id !== user?.id && (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    const isFollowing = user.followers?.includes(user?.id);
+                                    if (isFollowing) {
+                                      unfollowUser(user._id);
+                                    } else {
+                                      followUser(user._id);
+                                    }
+                                  }}
+                                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                                    user.followers?.includes(user?.id)
+                                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400'
+                                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                                  }`}
+                                >
+                                  {user.followers?.includes(user?.id) ? 'Unfollow' : 'Follow'}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : searchQuery.trim() && searchQuery.length >= 2 ? (
+                        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                          No users found
+                        </div>
+                      ) : searchHistory.length > 0 ? (
+                        <div className="py-2">
+                          <div className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                            Recent Searches
+                          </div>
+                          {searchHistory.map((query, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                              onClick={() => setSearchQuery(query)}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <span className="text-gray-400 dark:text-gray-500">🕒</span>
+                                <span className="text-gray-700 dark:text-gray-300">{query}</span>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newHistory = searchHistory.filter((_, i) => i !== index);
+                                  setSearchHistory(newHistory);
+                                  localStorage.setItem('searchHistory', JSON.stringify(newHistory));
+                                }}
+                                className="text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700">
+                            <button
+                              onClick={clearSearchHistory}
+                              className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                              Clear History
                             </button>
                           </div>
-                        ))}
-                        <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700">
-                          <button
-                            onClick={clearSearchHistory}
-                            className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Clear History
-                          </button>
                         </div>
-                      </div>
-                    ) : null}
-                    
-                    {/* Advanced Filters Panel */}
-                    {showFilters && (
-                      <div className="border-t border-gray-100 dark:border-gray-700 p-4">
-                        <div className="mb-3">
-                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Advanced Filters</h4>
-                          
-                          {/* Sort By */}
+                      ) : null}
+                      
+                      {/* Advanced Filters Panel */}
+                      {showFilters && (
+                        <div className="border-t border-gray-100 dark:border-gray-700 p-4">
                           <div className="mb-3">
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Sort by</label>
-                            <select
-                              value={filters.sortBy}
-                              onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value }))}
-                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Advanced Filters</h4>
+                            
+                            {/* Sort By */}
+                            <div className="mb-3">
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Sort by</label>
+                              <select
+                                value={filters.sortBy}
+                                onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="username">Username (A-Z)</option>
+                                <option value="followers">Most Followers</option>
+                                <option value="recent">Recently Joined</option>
+                              </select>
+                            </div>
+                            
+                            {/* Follower Count Range */}
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Min followers</label>
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  value={filters.minFollowers}
+                                  onChange={(e) => setFilters(prev => ({ ...prev, minFollowers: e.target.value }))}
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Max followers</label>
+                                <input
+                                  type="number"
+                                  placeholder="∞"
+                                  value={filters.maxFollowers}
+                                  onChange={(e) => setFilters(prev => ({ ...prev, maxFollowers: e.target.value }))}
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                            </div>
+                            
+                            {/* Has Posts Filter */}
+                            <div className="mb-3">
+                              <label className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  checked={filters.hasPosts}
+                                  onChange={(e) => setFilters(prev => ({ ...prev, hasPosts: e.target.checked }))}
+                                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">Has posts</span>
+                              </label>
+                            </div>
+                            
+                            {/* Apply Filters Button */}
+                            <button
+                              onClick={() => {
+                                if (searchQuery.trim()) {
+                                  searchUsers(searchQuery);
+                                }
+                              }}
+                              className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors duration-200"
                             >
-                              <option value="username">Username (A-Z)</option>
-                              <option value="followers">Most Followers</option>
-                              <option value="recent">Recently Joined</option>
-                            </select>
+                              Apply Filters
+                            </button>
                           </div>
-                          
-                          {/* Follower Count Range */}
-                          <div className="grid grid-cols-2 gap-2 mb-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Min followers</label>
-                              <input
-                                type="number"
-                                placeholder="0"
-                                value={filters.minFollowers}
-                                onChange={(e) => setFilters(prev => ({ ...prev, minFollowers: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Max followers</label>
-                              <input
-                                type="number"
-                                placeholder="∞"
-                                value={filters.maxFollowers}
-                                onChange={(e) => setFilters(prev => ({ ...prev, maxFollowers: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                              />
-                            </div>
-                          </div>
-                          
-                          {/* Has Posts Filter */}
-                          <div className="mb-3">
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={filters.hasPosts}
-                                onChange={(e) => setFilters(prev => ({ ...prev, hasPosts: e.target.checked }))}
-                                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-gray-700 dark:text-gray-300">Has posts</span>
-                            </label>
-                          </div>
-                          
-                          {/* Apply Filters Button */}
-                          <button
-                            onClick={() => {
-                              if (searchQuery.trim()) {
-                                searchUsers(searchQuery);
-                              }
-                            }}
-                            className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors duration-200"
-                          >
-                            Apply Filters
-                          </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Notifications */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
-                >
-                  🔔
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-                {showNotifications && (
-                  <div className="absolute top-full right-0 mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                      )}
                     </div>
-                    {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-                        No notifications
+                  )}
+                </div>
+
+                {/* Notifications */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="relative p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+                  >
+                    🔔
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  {showNotifications && (
+                    <div className="absolute top-full right-0 mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Notifications</h3>
                       </div>
-                    ) : (
-                      <div className="py-2">
-                        {notifications.map(notification => (
-                          <div
-                            key={notification._id}
-                            className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer ${
-                              !notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                            }`}
-                            onClick={() => markAsRead(notification._id)}
-                          >
-                            <div className="flex items-start space-x-3">
-                              <div className="flex-shrink-0">
-                                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                                  <span className="text-white text-sm">👤</span>
+                      {notifications.length === 0 ? (
+                        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                          No notifications
+                        </div>
+                      ) : (
+                        <div className="py-2">
+                          {notifications.map(notification => (
+                            <div
+                              key={notification._id}
+                              className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer ${
+                                !notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                              }`}
+                              onClick={() => markAsRead(notification._id)}
+                            >
+                              <div className="flex items-start space-x-3">
+                                <div className="flex-shrink-0">
+                                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                                    <span className="text-white text-sm">👤</span>
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-gray-900 dark:text-white">
+                                    <span 
+                                      className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                      onClick={(e) => { e.stopPropagation(); navigateToProfile(notification.sender); }}
+                                    >
+                                      {notification.sender?.username}
+                                    </span>
+                                    {' '}
+                                    {notification.type === 'like' && 'liked your post'}
+                                    {notification.type === 'comment' && 'commented on your post'}
+                                    {notification.type === 'follow' && 'started following you'}
+                                    {notification.type === 'mention' && 'mentioned you in a comment'}
+                                  </p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {new Date(notification.createdAt).toLocaleDateString()}
+                                  </p>
                                 </div>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  <span 
-                                    className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                                    onClick={(e) => { e.stopPropagation(); navigateToProfile(notification.sender); }}
-                                  >
-                                    {notification.sender?.username}
-                                  </span>
-                                  {' '}
-                                  {notification.type === 'like' && 'liked your post'}
-                                  {notification.type === 'comment' && 'commented on your post'}
-                                  {notification.type === 'follow' && 'started following you'}
-                                  {notification.type === 'mention' && 'mentioned you in a comment'}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                  {new Date(notification.createdAt).toLocaleDateString()}
-                                </p>
-                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-              {/* Theme Toggle */}
-              <button
-                onClick={toggleDarkMode}
-                className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
-              >
-                {darkMode ? '☀️' : '🌙'}
-              </button>
-
-              {/* User Menu */}
-              <div className="relative">
+                {/* Theme Toggle */}
                 <button
-                  onClick={() => setShowProfileMenu((prev) => !prev)}
-                  className="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+                  onClick={toggleDarkMode}
+                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-semibold text-sm">
-                      {user?.username?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
+                  {darkMode ? '☀️' : '🌙'}
                 </button>
-                {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                    <ul className="py-2">
-                      <li>
-                        <button
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
-                          onClick={() => setProfileMenuOption('account')}
-                        >
-                          Account Information
-                        </button>
-                      </li>
-                      <li>
-                        <button
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
-                          onClick={() => setProfileMenuOption('settings')}
-                        >
-                          Settings
-                        </button>
-                      </li>
-                      <li>
-                        <button
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
-                          onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                        >
-                          Logout
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                )}
+
+                {/* User Menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowProfileMenu((prev) => !prev)}
+                    className="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
+                        {user?.username?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  </button>
+                  {showProfileMenu && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                      <ul className="py-2">
+                        <li>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+                            onClick={() => setProfileMenuOption('account')}
+                          >
+                            Account Information
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+                            onClick={() => setProfileMenuOption('settings')}
+                          >
+                            Settings
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
+                            onClick={() => { setShowProfileMenu(false); handleLogout(); }}
+                          >
+                            Logout
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="w-full px-1 sm:px-4 py-4 sm:py-8 sm:max-w-2xl sm:mx-auto">
-        {currentView === 'dm' ? (
-          <DM
-            inbox={inbox}
-            activeChat={activeChat}
-            messages={messages}
-            onSelectChat={userObj => setActiveChat(userObj)}
-            onSendMessage={handleSendMessage}
-            messageText={messageText}
-            setMessageText={setMessageText}
-            user={user}
-            chatLoading={chatLoading}
-            onNavigateToProfile={navigateToProfile}
+        {/* Main Content */}
+        <div className="w-full px-1 sm:px-4 py-4 sm:py-8 sm:max-w-2xl sm:mx-auto">
+          {currentView === 'dm' ? (
+            <DM
+              inbox={inbox}
+              activeChat={activeChat}
+              messages={messages}
+              onSelectChat={userObj => setActiveChat(userObj)}
+              onSendMessage={handleSendMessage}
+              messageText={messageText}
+              setMessageText={setMessageText}
+              user={user}
+              chatLoading={chatLoading}
+              onNavigateToProfile={navigateToProfile}
+            />
+          ) : currentView === 'explore' ? (
+            <Explore
+              posts={explorePosts}
+              onPostClick={openPostModal}
+              onSearch={fetchExplorePosts}
+            />
+          ) : currentView === 'profile' ? (
+            profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+              </div>
+            ) : userProfile ? (
+              <>
+                <Profile
+                  userProfile={userProfile}
+                  userPosts={userPosts}
+                  user={user}
+                  editingProfile={editingProfile}
+                  editUsername={editUsername}
+                  editBio={editBio}
+                  editProfileImage={editProfileImage}
+                  editImageFile={editImageFile}
+                  editLoading={editLoading}
+                  editError={editError}
+                  setEditingProfile={setEditingProfile}
+                  setEditUsername={setEditUsername}
+                  setEditBio={setEditBio}
+                  setEditProfileImage={setEditProfileImage}
+                  setEditImageFile={setEditImageFile}
+                  handleEditProfile={async (e) => {
+                    e.preventDefault();
+                    setEditLoading(true);
+                    setEditError('');
+                    let imageUrl = editProfileImage;
+                    try {
+                      if (editImageFile) {
+                        const formData = new FormData();
+                        formData.append('image', editImageFile);
+                        const res = await fetch(`${API_URL}/upload`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                          body: formData,
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
+                        imageUrl = data.url;
+                      }
+                      const res = await fetch(`${API_URL}/users/me`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
+                      });
+                      const updated = await res.json();
+                      if (!res.ok) throw new Error(updated.message || 'Profile update failed');
+                      setUserProfile(updated);
+                      setUser(updated);
+                      localStorage.setItem('user', JSON.stringify(updated));
+                      setEditingProfile(false);
+                    } catch (err) {
+                      setEditError(err.message || 'Failed to update profile');
+                      console.error('Profile update error:', err);
+                    }
+                    setEditLoading(false);
+                  }}
+                  followUser={followUser}
+                  unfollowUser={unfollowUser}
+                  setCurrentView={setCurrentView}
+                  setActiveChat={setActiveChat}
+                  onPostClick={openPostModal}
+                />
+              </>
+            ) : null
+          ) : currentView === 'feed' ? (
+            <Feed
+              posts={posts}
+              user={user}
+              comments={comments}
+              showComments={showComments}
+              commentText={commentText}
+              onLike={handleLike}
+              onAddComment={(postId, value) => {
+                if (value !== undefined) {
+                  setCommentText(prev => ({ ...prev, [postId]: value }));
+                } else {
+                  handleAddComment(postId);
+                }
+              }}
+              onDeleteComment={handleDeleteComment}
+              onToggleComments={toggleComments}
+              onNavigateToProfile={navigateToProfile}
+              onPostClick={openPostModal}
+              stories={stories}
+              onStoryView={handleStoryView}
+              onCreateStory={() => setShowCreateStoryModal(true)}
+              onDeleteStory={handleDeleteStory}
+            />
+          ) : currentView === 'reels' ? (
+            <Reels
+              reels={reels}
+              user={user}
+              onReelView={handleReelView}
+              onCreateReel={() => setShowCreateReelModal(true)}
+              onDeleteReel={handleDeleteReel}
+              onNavigateToProfile={navigateToProfile}
+            />
+          ) : null}
+          {showPostModal && selectedPost && (
+            <PostModal
+              post={selectedPost}
+              user={user}
+              comments={comments[selectedPost._id] || []}
+              onClose={closePostModal}
+              onLike={() => handleLike(selectedPost._id)}
+              onAddComment={() => handleAddComment(selectedPost._id)}
+              onDeleteComment={handleDeleteComment}
+              commentText={commentText[selectedPost._id] || ''}
+              setCommentText={val => setCommentText(prev => ({ ...prev, [selectedPost._id]: val }))}
+            />
+          )}
+        </div>
+        {/* Bottom Navigation Bar */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-gray-900/90 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-2 shadow-lg backdrop-blur-md">
+          <button
+            className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'feed' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+            onClick={() => setCurrentView('feed')}
+          >
+            <span className="text-xl">🏠</span>
+            <span className="text-xs">Feed</span>
+          </button>
+          <button
+            className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'explore' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+            onClick={() => setCurrentView('explore')}
+          >
+            <span className="text-xl">🔍</span>
+            <span className="text-xs">Explore</span>
+          </button>
+          <button
+            className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+            onClick={() => setCurrentView('reels')}
+          >
+            <span className="text-xl">🎬</span>
+            <span className="text-xs">Reels</span>
+          </button>
+          <button
+            className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+            onClick={() => setCurrentView('dm')}
+          >
+            <span className="text-xl">💬</span>
+            <span className="text-xs">Messages</span>
+          </button>
+          <button
+            className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'profile' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+            onClick={() => {
+              setCurrentView('profile');
+              if (user && user._id) {
+                setUserProfile(user);
+                fetchUserProfile(user._id);
+              }
+            }}
+          >
+            <span className="text-xl">👤</span>
+            <span className="text-xs">Profile</span>
+          </button>
+        </nav>
+        {/* Floating Action Button for Create Post */}
+        {token && !showCreatePostModal && currentView !== 'reels' && (
+          <button
+            className="fixed bottom-20 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
+            title="Create Post"
+            onClick={() => setShowCreatePostModal(true)}
+          >
+            +
+          </button>
+        )}
+        
+        {/* Floating Action Button for Create Reel */}
+        {token && !showCreateReelModal && currentView === 'reels' && (
+          <button
+            className="fixed bottom-20 right-6 z-50 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
+            title="Create Reel"
+            onClick={() => setShowCreateReelModal(true)}
+          >
+            🎬
+          </button>
+        )}
+        {/* Create Post Modal */}
+        {showCreatePostModal && (
+          <CreatePostModal
+            onClose={() => setShowCreatePostModal(false)}
+            onCreate={handleCreatePostModal}
+            uploading={uploadingPost}
+            error={createPostError}
           />
-        ) : currentView === 'explore' ? (
-          <Explore
-            posts={explorePosts}
-            onPostClick={openPostModal}
-            onSearch={fetchExplorePosts}
+        )}
+        
+        {/* Create Story Modal */}
+        {showCreateStoryModal && (
+          <CreateStoryModal
+            onClose={() => setShowCreateStoryModal(false)}
+            onCreate={handleCreateStory}
+            uploading={uploadingStory}
+            error={createStoryError}
           />
-        ) : currentView === 'profile' ? (
-          profileLoading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-              <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+        )}
+        
+        {/* Create Reel Modal */}
+        {showCreateReelModal && (
+          <CreateReelModal
+            onClose={() => setShowCreateReelModal(false)}
+            onCreate={handleCreateReel}
+            uploading={uploadingReel}
+            error={createReelError}
+          />
+        )}
+        {/* Profile menu content modal */}
+        {profileMenuOption === 'account' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={() => setProfileMenuOption(null)}>
+                ✕
+              </button>
+              <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Account Information</h2>
+              <div className="space-y-2">
+                <div><span className="font-medium">Username:</span> {user?.username}</div>
+                <div><span className="font-medium">Email:</span> {user?.email}</div>
+                <div><span className="font-medium">Bio:</span> {user?.bio || 'No bio set.'}</div>
+                <div><span className="font-medium">Joined:</span> {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</div>
+              </div>
             </div>
-          ) : userProfile ? (
-            <>
-              <Profile
-                userProfile={userProfile}
-                userPosts={userPosts}
-                user={user}
-                editingProfile={editingProfile}
-                editUsername={editUsername}
-                editBio={editBio}
-                editProfileImage={editProfileImage}
-                editImageFile={editImageFile}
-                editLoading={editLoading}
-                editError={editError}
-                setEditingProfile={setEditingProfile}
-                setEditUsername={setEditUsername}
-                setEditBio={setEditBio}
-                setEditProfileImage={setEditProfileImage}
-                setEditImageFile={setEditImageFile}
-                handleEditProfile={async (e) => {
+          </div>
+        )}
+        {profileMenuOption === 'settings' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={() => setProfileMenuOption(null)}>
+                ✕
+              </button>
+              <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Settings</h2>
+              <form
+                className="space-y-4"
+                onSubmit={async (e) => {
                   e.preventDefault();
                   setEditLoading(true);
                   setEditError('');
-                  let imageUrl = editProfileImage;
                   try {
-                    if (editImageFile) {
-                      const formData = new FormData();
-                      formData.append('image', editImageFile);
-                      const res = await fetch(`${API_URL}/upload`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${token}` },
-                        body: formData,
-                      });
-                      const data = await res.json();
-                      if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
-                      imageUrl = data.url;
-                    }
-                    const res = await fetch(`${API_URL}/users/me`, {
+                    const res = await fetch(`${API_URL}/auth/settings`, {
                       method: 'PUT',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        username: editUsername,
+                        email: editEmail,
+                        password: editPassword,
+                        isPrivate: editIsPrivate
+                      })
                     });
                     const updated = await res.json();
-                    if (!res.ok) throw new Error(updated.message || 'Profile update failed');
-                    setUserProfile(updated);
+                    if (!res.ok) throw new Error(updated.message || 'Settings update failed');
                     setUser(updated);
                     localStorage.setItem('user', JSON.stringify(updated));
-                    setEditingProfile(false);
+                    setEditPassword('');
+                    setProfileMenuOption(null);
                   } catch (err) {
-                    setEditError(err.message || 'Failed to update profile');
-                    console.error('Profile update error:', err);
+                    setEditError(err.message || 'Failed to update settings');
                   }
                   setEditLoading(false);
                 }}
-                followUser={followUser}
-                unfollowUser={unfollowUser}
-                setCurrentView={setCurrentView}
-                setActiveChat={setActiveChat}
-                onPostClick={openPostModal}
-              />
-            </>
-          ) : null
-        ) : currentView === 'feed' ? (
-          <Feed
-            posts={posts}
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                  <input
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={editUsername}
+                    onChange={e => setEditUsername(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                  <input
+                    type="email"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={editEmail}
+                    onChange={e => setEditEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                  <input
+                    type="password"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={editPassword}
+                    onChange={e => setEditPassword(e.target.value)}
+                    placeholder="Leave blank to keep current password"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editIsPrivate}
+                    onChange={e => setEditIsPrivate(e.target.checked)}
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    id="private-account-toggle"
+                  />
+                  <label htmlFor="private-account-toggle" className="text-sm text-gray-700 dark:text-gray-300">Private Account</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={darkMode}
+                    onChange={toggleDarkMode}
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    id="dark-mode-toggle"
+                  />
+                  <label htmlFor="dark-mode-toggle" className="text-sm text-gray-700 dark:text-gray-300">Dark Mode</label>
+                </div>
+                {editError && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+                    {editError}
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={editLoading}
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </form>
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <button
+                  className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-all duration-200"
+                  onClick={async () => {
+                    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) return;
+                    setEditLoading(true);
+                    try {
+                      const res = await fetch(`${API_URL}/auth/delete`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` }
+                      });
+                      if (!res.ok) throw new Error('Failed to delete account');
+                      handleLogout();
+                    } catch (err) {
+                      setEditError('Failed to delete account');
+                    }
+                    setEditLoading(false);
+                  }}
+                >
+                  Delete Account
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Global Video Call Component */}
+        {showVideoCall && globalIncomingCall && (
+          <VideoCall
             user={user}
-            comments={comments}
-            showComments={showComments}
-            commentText={commentText}
-            onLike={handleLike}
-            onAddComment={(postId, value) => {
-              if (value !== undefined) {
-                setCommentText(prev => ({ ...prev, [postId]: value }));
-              } else {
-                handleAddComment(postId);
-              }
+            activeChat={{ _id: globalIncomingCall.from, username: 'Unknown User' }}
+            onClose={() => {
+              setShowVideoCall(false);
+              setGlobalIncomingCall(null);
             }}
-            onDeleteComment={handleDeleteComment}
-            onToggleComments={toggleComments}
-            onNavigateToProfile={navigateToProfile}
-            onPostClick={openPostModal}
-            stories={stories}
-            onStoryView={handleStoryView}
-            onCreateStory={() => setShowCreateStoryModal(true)}
-            onDeleteStory={handleDeleteStory}
-          />
-        ) : currentView === 'reels' ? (
-          <Reels
-            reels={reels}
-            user={user}
-            onReelView={handleReelView}
-            onCreateReel={() => setShowCreateReelModal(true)}
-            onDeleteReel={handleDeleteReel}
-            onNavigateToProfile={navigateToProfile}
-          />
-        ) : null}
-        {showPostModal && selectedPost && (
-          <PostModal
-            post={selectedPost}
-            user={user}
-            comments={comments[selectedPost._id] || []}
-            onClose={closePostModal}
-            onLike={() => handleLike(selectedPost._id)}
-            onAddComment={() => handleAddComment(selectedPost._id)}
-            onDeleteComment={handleDeleteComment}
-            commentText={commentText[selectedPost._id] || ''}
-            setCommentText={val => setCommentText(prev => ({ ...prev, [selectedPost._id]: val }))}
           />
         )}
       </div>
-      {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-gray-900/90 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-2 shadow-lg backdrop-blur-md">
-        <button
-          className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'feed' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('feed')}
-        >
-          <span className="text-xl">🏠</span>
-          <span className="text-xs">Feed</span>
-        </button>
-        <button
-          className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'explore' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('explore')}
-        >
-          <span className="text-xl">🔍</span>
-          <span className="text-xs">Explore</span>
-        </button>
-        <button
-          className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('reels')}
-        >
-          <span className="text-xl">🎬</span>
-          <span className="text-xs">Reels</span>
-        </button>
-        <button
-          className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('dm')}
-        >
-          <span className="text-xl">💬</span>
-          <span className="text-xs">Messages</span>
-        </button>
-        <button
-          className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'profile' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => {
-            setCurrentView('profile');
-            if (user && user._id) {
-              setUserProfile(user);
-              fetchUserProfile(user._id);
-            }
-          }}
-        >
-          <span className="text-xl">👤</span>
-          <span className="text-xs">Profile</span>
-        </button>
-      </nav>
-      {/* Floating Action Button for Create Post */}
-      {token && !showCreatePostModal && currentView !== 'reels' && (
-        <button
-          className="fixed bottom-20 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
-          title="Create Post"
-          onClick={() => setShowCreatePostModal(true)}
-        >
-          +
-        </button>
       )}
-      
-      {/* Floating Action Button for Create Reel */}
-      {token && !showCreateReelModal && currentView === 'reels' && (
-        <button
-          className="fixed bottom-20 right-6 z-50 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg w-16 h-16 flex items-center justify-center text-3xl focus:outline-none transition-all duration-200"
-          title="Create Reel"
-          onClick={() => setShowCreateReelModal(true)}
-        >
-          🎬
-        </button>
-      )}
-      {/* Create Post Modal */}
-      {showCreatePostModal && (
-        <CreatePostModal
-          onClose={() => setShowCreatePostModal(false)}
-          onCreate={handleCreatePostModal}
-          uploading={uploadingPost}
-          error={createPostError}
-        />
-      )}
-      
-      {/* Create Story Modal */}
-      {showCreateStoryModal && (
-        <CreateStoryModal
-          onClose={() => setShowCreateStoryModal(false)}
-          onCreate={handleCreateStory}
-          uploading={uploadingStory}
-          error={createStoryError}
-        />
-      )}
-      
-      {/* Create Reel Modal */}
-      {showCreateReelModal && (
-        <CreateReelModal
-          onClose={() => setShowCreateReelModal(false)}
-          onCreate={handleCreateReel}
-          uploading={uploadingReel}
-          error={createReelError}
-        />
-      )}
-      {/* Profile menu content modal */}
-      {profileMenuOption === 'account' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
-            <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={() => setProfileMenuOption(null)}>
-              ✕
-            </button>
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Account Information</h2>
-            <div className="space-y-2">
-              <div><span className="font-medium">Username:</span> {user?.username}</div>
-              <div><span className="font-medium">Email:</span> {user?.email}</div>
-              <div><span className="font-medium">Bio:</span> {user?.bio || 'No bio set.'}</div>
-              <div><span className="font-medium">Joined:</span> {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</div>
-            </div>
-          </div>
-        </div>
-      )}
-      {profileMenuOption === 'settings' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md relative">
-            <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={() => setProfileMenuOption(null)}>
-              ✕
-            </button>
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Settings</h2>
-            <form
-              className="space-y-4"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setEditLoading(true);
-                setEditError('');
-                try {
-                  const res = await fetch(`${API_URL}/auth/settings`, {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                      username: editUsername,
-                      email: editEmail,
-                      password: editPassword,
-                      isPrivate: editIsPrivate
-                    })
-                  });
-                  const updated = await res.json();
-                  if (!res.ok) throw new Error(updated.message || 'Settings update failed');
-                  setUser(updated);
-                  localStorage.setItem('user', JSON.stringify(updated));
-                  setEditPassword('');
-                  setProfileMenuOption(null);
-                } catch (err) {
-                  setEditError(err.message || 'Failed to update settings');
-                }
-                setEditLoading(false);
-              }}
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
-                <input
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  value={editUsername}
-                  onChange={e => setEditUsername(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  value={editEmail}
-                  onChange={e => setEditEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  value={editPassword}
-                  onChange={e => setEditPassword(e.target.value)}
-                  placeholder="Leave blank to keep current password"
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={editIsPrivate}
-                  onChange={e => setEditIsPrivate(e.target.checked)}
-                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                  id="private-account-toggle"
-                />
-                <label htmlFor="private-account-toggle" className="text-sm text-gray-700 dark:text-gray-300">Private Account</label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={darkMode}
-                  onChange={toggleDarkMode}
-                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                  id="dark-mode-toggle"
-                />
-                <label htmlFor="dark-mode-toggle" className="text-sm text-gray-700 dark:text-gray-300">Dark Mode</label>
-              </div>
-              {editError && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-                  {editError}
-                </div>
-              )}
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={editLoading}
-              >
-                {editLoading ? 'Saving...' : 'Save Changes'}
-              </button>
-            </form>
-            <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-              <button
-                className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-all duration-200"
-                onClick={async () => {
-                  if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) return;
-                  setEditLoading(true);
-                  try {
-                    const res = await fetch(`${API_URL}/auth/delete`, {
-                      method: 'DELETE',
-                      headers: { Authorization: `Bearer ${token}` }
-                    });
-                    if (!res.ok) throw new Error('Failed to delete account');
-                    handleLogout();
-                  } catch (err) {
-                    setEditError('Failed to delete account');
-                  }
-                  setEditLoading(false);
-                }}
-              >
-                Delete Account
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Global Video Call Component */}
-      {showVideoCall && globalIncomingCall && (
-        <VideoCall
-          user={user}
-          activeChat={{ _id: globalIncomingCall.from, username: 'Unknown User' }}
-          onClose={() => {
-            setShowVideoCall(false);
-            setGlobalIncomingCall(null);
-          }}
-        />
-      )}
-    </div>
+    </ErrorBoundary>
   );
 }
 
