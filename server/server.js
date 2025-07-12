@@ -19,6 +19,7 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: [
+      'https://connectsphere-rho.vercel.app',
       'https://connectsphere-bice.vercel.app',
       'https://connectsphere-phi.vercel.app',
       'https://connectsphere-lowrences-projects-9eb17f85.vercel.app',
@@ -34,6 +35,7 @@ const io = socketIo(server, {
 // Middleware
 app.use(cors({
   origin: [
+    'https://connectsphere-rho.vercel.app',
     'https://connectsphere-bice.vercel.app',
     'https://connectsphere-phi.vercel.app',
     'https://connectsphere-lowrences-projects-9eb17f85.vercel.app',
