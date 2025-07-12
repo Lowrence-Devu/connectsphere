@@ -413,6 +413,7 @@ export const useVideoCall = (user, activeChat) => {
     endCall,
     toggleMute,
     toggleVideo,
-    formatDuration
+    formatDuration,
+    peer
   };
 }; 

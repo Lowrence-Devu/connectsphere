@@ -296,4 +296,4 @@ const iceServers = [
 - [ ] No firewall blocking WebRTC
 - [ ] Using HTTPS (for production)
 - [ ] Audio/video elements properly configured
-- [ ] Stream tracks are enabled 
+- [ ] Stream tracks are enabled

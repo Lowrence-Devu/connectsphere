@@ -20,7 +20,8 @@ const VideoCall = ({ user, activeChat, onClose }) => {
     endCall,
     toggleMute,
     toggleVideo,
-    formatDuration
+    formatDuration,
+    peer
   } = useVideoCall(user, activeChat);
 
   const localVideoRef = useRef();
