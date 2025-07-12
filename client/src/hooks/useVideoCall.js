@@ -45,6 +45,11 @@ socket.on('disconnect', (reason) => {
   console.log('[Socket] Disconnected:', reason);
 });
 
+// Helper to check if an object is a real HTMLAudioElement
+function isRealAudioElement(obj) {
+  return obj instanceof window.HTMLAudioElement;
+}
+
 export const useVideoCall = (user, activeChat) => {
   const [callType, setCallType] = useState(null); // 'voice' | 'video' | null
   const [callActive, setCallActive] = useState(false);
@@ -271,7 +276,10 @@ export const useVideoCall = (user, activeChat) => {
       
       if (ringtoneRef.current) {
         try {
-          ringtoneRef.current.play().catch(err => console.log('Ringtone play failed:', err));
+          const playResult = ringtoneRef.current && ringtoneRef.current.play && ringtoneRef.current.play();
+          if (playResult && typeof playResult.catch === 'function') {
+            playResult.catch(err => console.log('Ringtone play failed:', err));
+          }
         } catch (err) {
           console.log('Ringtone play error:', err);
         }
@@ -323,7 +331,10 @@ export const useVideoCall = (user, activeChat) => {
       endCall();
       if (callEndRef.current) {
         try {
-          callEndRef.current.play().catch(err => console.log('Call end sound failed:', err));
+          const playResult = callEndRef.current && callEndRef.current.play && callEndRef.current.play();
+          if (playResult && typeof playResult.catch === 'function') {
+            playResult.catch(err => console.log('Call end sound failed:', err));
+          }
         } catch (err) {
           console.log('Call end sound error:', err);
         }
