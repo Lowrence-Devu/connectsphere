@@ -9,7 +9,9 @@ const VideoCallDebug = ({
   remoteStream, 
   peer,
   user,
-  activeChat 
+  activeChat,
+  error,
+  connectionStats
 }) => {
   if (!callActive) return null;
 
@@ -25,7 +27,8 @@ const VideoCallDebug = ({
       videoTracks: videoTracks.length,
       enabled: tracks.map(track => track.enabled),
       muted: audioTracks.length > 0 ? !audioTracks[0].enabled : false,
-      videoOff: videoTracks.length > 0 ? !videoTracks[0].enabled : false
+      videoOff: videoTracks.length > 0 ? !videoTracks[0].enabled : false,
+      readyState: tracks.map(track => track.readyState)
     };
   };
 
@@ -49,6 +52,12 @@ const VideoCallDebug = ({
           <strong>Quality:</strong> {callQuality}
         </div>
         
+        {error && (
+          <div className="text-red-300">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+        
         <div>
           <strong>User:</strong> {user?.username} ({user?._id})
         </div>
@@ -61,6 +70,21 @@ const VideoCallDebug = ({
           <strong>Peer:</strong> {peer ? 'Connected' : 'Not connected'}
         </div>
         
+        {connectionStats && (
+          <div className="border-t border-gray-600 pt-2">
+            <strong>Connection Stats:</strong>
+            <div className="ml-2">
+              Received: {Math.round(connectionStats.bytesReceived / 1024)}KB
+            </div>
+            <div className="ml-2">
+              Sent: {Math.round(connectionStats.bytesSent / 1024)}KB
+            </div>
+            <div className="ml-2">
+              Timestamp: {new Date(connectionStats.timestamp).toLocaleTimeString()}
+            </div>
+          </div>
+        )}
+        
         <div className="border-t border-gray-600 pt-2 mt-2">
           <strong>Local Stream:</strong>
           <div className="ml-2">
@@ -68,6 +92,9 @@ const VideoCallDebug = ({
           </div>
           <div className="ml-2">
             Video: {localStreamInfo.videoTracks} tracks ({localStreamInfo.videoOff ? 'Off' : 'On'})
+          </div>
+          <div className="ml-2">
+            Ready States: {localStreamInfo.readyState?.join(', ') || 'N/A'}
           </div>
         </div>
         
@@ -78,6 +105,9 @@ const VideoCallDebug = ({
           </div>
           <div className="ml-2">
             Video: {remoteStreamInfo.videoTracks} tracks
+          </div>
+          <div className="ml-2">
+            Ready States: {remoteStreamInfo.readyState?.join(', ') || 'N/A'}
           </div>
         </div>
         
@@ -91,6 +121,22 @@ const VideoCallDebug = ({
           </div>
           <div className="ml-2">
             WebRTC: {window.RTCPeerConnection && navigator.mediaDevices?.getUserMedia ? '✅' : '❌'}
+          </div>
+          <div className="ml-2">
+            Audio Context: {window.AudioContext || window.webkitAudioContext ? '✅' : '❌'}
+          </div>
+        </div>
+        
+        <div className="border-t border-gray-600 pt-2">
+          <strong>Network Info:</strong>
+          <div className="ml-2">
+            Connection: {navigator.connection?.effectiveType || 'Unknown'}
+          </div>
+          <div className="ml-2">
+            Downlink: {navigator.connection?.downlink || 'Unknown'} Mbps
+          </div>
+          <div className="ml-2">
+            RTT: {navigator.connection?.rtt || 'Unknown'} ms
           </div>
         </div>
       </div>

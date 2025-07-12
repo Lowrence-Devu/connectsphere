@@ -108,12 +108,15 @@ mongoose.connect(process.env.MONGO_URI)
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  
+  let userId = null;
 
   // Listen for join event to join user-specific room
-  socket.on('join', (userId) => {
-    if (userId) {
-      socket.join(String(userId));
-      console.log(`Socket ${socket.id} joined room ${userId}`);
+  socket.on('join', (user) => {
+    if (user) {
+      userId = user;
+      socket.join(String(user));
+      console.log(`Socket ${socket.id} joined room ${user}`);
     }
   });
 
@@ -133,71 +136,156 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Enhanced WebRTC signaling events for calls with better error handling
+  // Enhanced WebRTC signaling events for calls with better error handling and validation
   socket.on('call:request', ({ to, from, callType }) => {
-    console.log(`Call request from ${from} to ${to} (${callType})`);
-    io.to(String(to)).emit('call:incoming', { from, callType });
+    try {
+      if (!to || !from || !callType) {
+        console.error('Invalid call request data:', { to, from, callType });
+        return;
+      }
+      console.log(`Call request from ${from} to ${to} (${callType})`);
+      io.to(String(to)).emit('call:incoming', { from, callType });
+    } catch (err) {
+      console.error('Call request error:', err);
+    }
   });
   
   socket.on('call:accept', ({ to, from }) => {
-    console.log(`Call accepted by ${from} to ${to}`);
-    io.to(String(to)).emit('call:accepted', { from });
+    try {
+      if (!to || !from) {
+        console.error('Invalid call accept data:', { to, from });
+        return;
+      }
+      console.log(`Call accepted by ${from} to ${to}`);
+      io.to(String(to)).emit('call:accepted', { from });
+    } catch (err) {
+      console.error('Call accept error:', err);
+    }
   });
   
   socket.on('call:signal', ({ to, from, signal }) => {
-    console.log(`Signal from ${from} to ${to}`);
-    io.to(String(to)).emit('call:signal', { from, signal });
+    try {
+      if (!to || !from || !signal) {
+        console.error('Invalid call signal data:', { to, from, signal: !!signal });
+        return;
+      }
+      console.log(`Signal from ${from} to ${to}`);
+      io.to(String(to)).emit('call:signal', { from, signal });
+    } catch (err) {
+      console.error('Call signal error:', err);
+    }
   });
   
   socket.on('call:end', ({ to, from }) => {
-    console.log(`Call ended by ${from} to ${to}`);
-    io.to(String(to)).emit('call:ended', { from });
+    try {
+      if (!to || !from) {
+        console.error('Invalid call end data:', { to, from });
+        return;
+      }
+      console.log(`Call ended by ${from} to ${to}`);
+      io.to(String(to)).emit('call:ended', { from });
+    } catch (err) {
+      console.error('Call end error:', err);
+    }
   });
   
-  // Single ICE candidate handler for all WebRTC flows
+  // Single ICE candidate handler for all WebRTC flows with validation
   socket.on('ice-candidate', ({ to, from, candidate }) => {
-    console.log(`ICE candidate from ${from} to ${to}`);
-    io.to(String(to)).emit('ice-candidate', { from, candidate });
+    try {
+      if (!to || !from || !candidate) {
+        console.error('Invalid ICE candidate data:', { to, from, candidate: !!candidate });
+        return;
+      }
+      console.log(`ICE candidate from ${from} to ${to}`);
+      io.to(String(to)).emit('ice-candidate', { from, candidate });
+    } catch (err) {
+      console.error('ICE candidate error:', err);
+    }
   });
 
-  // Video call room management
+  // Video call room management with cleanup
   socket.on('join-call', (callId) => {
-    socket.join(callId);
-    console.log(`Socket ${socket.id} joined call room ${callId}`);
+    try {
+      if (!callId) {
+        console.error('Invalid call ID for join-call');
+        return;
+      }
+      socket.join(callId);
+      console.log(`Socket ${socket.id} joined call room ${callId}`);
+    } catch (err) {
+      console.error('Join call error:', err);
+    }
   });
   
   socket.on('leave-call', (callId) => {
-    socket.leave(callId);
-    console.log(`Socket ${socket.id} left call room ${callId}`);
+    try {
+      if (!callId) {
+        console.error('Invalid call ID for leave-call');
+        return;
+      }
+      socket.leave(callId);
+      console.log(`Socket ${socket.id} left call room ${callId}`);
+    } catch (err) {
+      console.error('Leave call error:', err);
+    }
   });
   
-  // WebRTC signaling
+  // WebRTC signaling with validation
   socket.on('offer', (data) => {
-    // Emit to the target user's room
-    io.to(String(data.targetUserId)).emit('offer', {
-      offer: data.offer,
-      callerId: data.callerId
-    });
+    try {
+      if (!data.targetUserId || !data.offer || !data.callerId) {
+        console.error('Invalid offer data:', data);
+        return;
+      }
+      // Emit to the target user's room
+      io.to(String(data.targetUserId)).emit('offer', {
+        offer: data.offer,
+        callerId: data.callerId
+      });
+    } catch (err) {
+      console.error('Offer error:', err);
+    }
   });
   
   socket.on('answer', (data) => {
-    // Emit to the target user's room
-    io.to(String(data.targetUserId)).emit('answer', {
-      answer: data.answer,
-      answererId: data.answererId
-    });
+    try {
+      if (!data.targetUserId || !data.answer || !data.answererId) {
+        console.error('Invalid answer data:', data);
+        return;
+      }
+      // Emit to the target user's room
+      io.to(String(data.targetUserId)).emit('answer', {
+        answer: data.answer,
+        answererId: data.answererId
+      });
+    } catch (err) {
+      console.error('Answer error:', err);
+    }
   });
   
   socket.on('call-ended', (data) => {
-    // Emit to the target user's room
-    io.to(String(data.targetUserId)).emit('call-ended', {
-      callId: data.callId,
-      endedBy: data.endedBy
-    });
+    try {
+      if (!data.targetUserId || !data.callId || !data.endedBy) {
+        console.error('Invalid call-ended data:', data);
+        return;
+      }
+      // Emit to the target user's room
+      io.to(String(data.targetUserId)).emit('call-ended', {
+        callId: data.callId,
+        endedBy: data.endedBy
+      });
+    } catch (err) {
+      console.error('Call ended error:', err);
+    }
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    console.log('User disconnected:', socket.id, 'User ID:', userId);
+    // Clean up any active calls for this user
+    if (userId) {
+      // Notify other users that this user has disconnected
+      socket.broadcast.emit('user_disconnected', { userId });
+    }
   });
 });
 
