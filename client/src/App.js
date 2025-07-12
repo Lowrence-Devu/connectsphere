@@ -11,15 +11,42 @@ import Explore from './components/Explore';
 import DM from './components/DM';
 import VideoCall from './components/VideoCall';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
 // Add debugging for environment variables
 console.log('[App] Environment check:', {
   NODE_ENV: process.env.NODE_ENV,
   REACT_APP_API_URL: process.env.REACT_APP_API_URL,
-  API_URL: API_URL,
   windowLocation: window.location.href
 });
+
+// Improved API URL logic for production
+const getApiUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // For production, try to construct the API URL from the current domain
+  if (process.env.NODE_ENV === 'production') {
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    
+    // If we're on Vercel, the backend should be on Render
+    if (hostname.includes('vercel.app')) {
+      return 'https://connectsphere-backend.onrender.com/api';
+    }
+    
+    // For other production deployments
+    const baseUrl = port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
+    return `${baseUrl}/api`;
+  }
+  
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = getApiUrl();
+
+// Log the final API URL
+console.log('[App] Final API URL:', API_URL);
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
