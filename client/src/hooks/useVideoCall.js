@@ -146,8 +146,20 @@ export const useVideoCall = (user, activeChat) => {
             currentTime: 0 
           };
         };
+        
+        // Ensure refs are initialized even if audio fails
+        if (!ringtoneRef.current) {
+          ringtoneRef.current = { play: () => {}, pause: () => {}, currentTime: 0 };
+        }
+        if (!callEndRef.current) {
+          callEndRef.current = { play: () => {}, pause: () => {}, currentTime: 0 };
+        }
+        
       } catch (err) {
         console.error('Audio initialization failed:', err);
+        // Set fallback refs
+        ringtoneRef.current = { play: () => {}, pause: () => {}, currentTime: 0 };
+        callEndRef.current = { play: () => {}, pause: () => {}, currentTime: 0 };
       }
     };
 
@@ -243,7 +255,11 @@ export const useVideoCall = (user, activeChat) => {
       }
       
       if (ringtoneRef.current) {
-        ringtoneRef.current.play().catch(err => console.log('Ringtone play failed:', err));
+        try {
+          ringtoneRef.current.play().catch(err => console.log('Ringtone play failed:', err));
+        } catch (err) {
+          console.log('Ringtone play error:', err);
+        }
       }
     };
 
@@ -259,8 +275,12 @@ export const useVideoCall = (user, activeChat) => {
         }
       }
       if (ringtoneRef.current) {
-        ringtoneRef.current.pause();
-        ringtoneRef.current.currentTime = 0;
+        try {
+          ringtoneRef.current.pause();
+          ringtoneRef.current.currentTime = 0;
+        } catch (err) {
+          console.log('Ringtone pause error:', err);
+        }
       }
       // Close browser notification if exists
       if (notificationRef.current) {
@@ -287,7 +307,11 @@ export const useVideoCall = (user, activeChat) => {
       console.log('[Socket] Call ended by:', from);
       endCall();
       if (callEndRef.current) {
-        callEndRef.current.play().catch(err => console.log('Call end sound failed:', err));
+        try {
+          callEndRef.current.play().catch(err => console.log('Call end sound failed:', err));
+        } catch (err) {
+          console.log('Call end sound error:', err);
+        }
       }
       // Close browser notification if exists
       if (notificationRef.current) {
@@ -390,12 +414,7 @@ export const useVideoCall = (user, activeChat) => {
           ringtoneRef.current.pause();
           ringtoneRef.current.currentTime = 0;
         } catch (e) {
-          if (ringtoneRef.current && typeof ringtoneRef.current.pause === 'function') {
-            ringtoneRef.current.pause();
-          }
-          if (ringtoneRef.current && ringtoneRef.current.oscillator) {
-            try { ringtoneRef.current.oscillator.stop(); } catch (err) {}
-          }
+          console.log('Ringtone stop error:', e);
         }
       }
     }
@@ -518,8 +537,12 @@ export const useVideoCall = (user, activeChat) => {
       
       // Stop ringtone
       if (ringtoneRef.current) {
-        ringtoneRef.current.pause();
-        ringtoneRef.current.currentTime = 0;
+        try {
+          ringtoneRef.current.pause();
+          ringtoneRef.current.currentTime = 0;
+        } catch (err) {
+          console.log('Ringtone pause error:', err);
+        }
       }
       
       const media = incomingCall.callType === 'video'
@@ -616,8 +639,12 @@ export const useVideoCall = (user, activeChat) => {
     setError(null);
     // Stop ringtone
     if (ringtoneRef.current) {
-      ringtoneRef.current.pause();
-      ringtoneRef.current.currentTime = 0;
+      try {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      } catch (err) {
+        console.log('Ringtone pause error:', err);
+      }
     }
     // Close browser notification if exists
     if (notificationRef.current) {
@@ -625,7 +652,7 @@ export const useVideoCall = (user, activeChat) => {
       notificationRef.current = null;
     }
     socket.emit('call:end', {
-      to: incomingCall.from,
+      to: incomingCall?.from,
       from: user._id
     });
   }, [incomingCall, user]);
@@ -673,7 +700,9 @@ export const useVideoCall = (user, activeChat) => {
       try {
         ringtoneRef.current.pause();
         ringtoneRef.current.currentTime = 0;
-      } catch (e) {}
+      } catch (e) {
+        console.log('Ringtone cleanup error:', e);
+      }
     }
     
     // Close browser notification if exists
