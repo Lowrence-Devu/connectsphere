@@ -5,7 +5,8 @@ const Stories = ({
   onStoryView, 
   onCreateStory, 
   onDeleteStory,
-  user 
+  user,
+  onNavigateToProfile
 }) => {
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [currentAuthorIndex, setCurrentAuthorIndex] = useState(0);
@@ -124,11 +125,15 @@ const Stories = ({
                   />
                 </div>
               </button>
-              <span className={`text-xs truncate max-w-16 ${
-                isCurrentUser 
-                  ? 'text-blue-600 dark:text-blue-400 font-medium' 
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}>
+              <span 
+                className={`text-xs truncate max-w-16 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 ${
+                  isCurrentUser 
+                    ? 'text-blue-600 dark:text-blue-400 font-medium' 
+                    : 'text-gray-600 dark:text-gray-400'
+                }`}
+                onClick={() => onNavigateToProfile && onNavigateToProfile(authorStories.author)}
+                title="View profile"
+              >
                 {isCurrentUser ? 'Your Story' : authorStories.author.username}
               </span>
             </div>
@@ -180,11 +185,13 @@ const Stories = ({
                   className="w-10 h-10 rounded-full object-cover"
                 />
                 <div>
-                  <div className={`font-semibold ${
+                  <div className={`font-semibold cursor-pointer hover:text-blue-300 ${
                     user && currentAuthor.author._id === user._id 
                       ? 'text-blue-300' 
                       : ''
-                  }`}>
+                  }`}
+                  onClick={() => onNavigateToProfile && onNavigateToProfile(currentAuthor.author)}
+                  >
                     {user && currentAuthor.author._id === user._id 
                       ? 'Your Story' 
                       : currentAuthor.author.username}

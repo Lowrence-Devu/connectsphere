@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import io from 'socket.io-client';
 
 const VideoCall = ({ 
   callId, 
@@ -28,16 +29,73 @@ const VideoCall = ({
   const rtcConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
     ]
   };
 
   useEffect(() => {
+    // Initialize socket connection
+    const socket = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000');
+    socketRef.current = socket;
+
+    // Join user's room for signaling
+    socket.emit('join', user._id);
+
+    // Socket event handlers
+    socket.on('offer', async (data) => {
+      try {
+        console.log('Received offer from:', data.callerId);
+        if (!peerConnectionRef.current) return;
+        
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await peerConnectionRef.current.createAnswer();
+        await peerConnectionRef.current.setLocalDescription(answer);
+        
+        console.log('Sending answer to:', data.callerId);
+        socket.emit('answer', {
+          targetUserId: data.callerId,
+          answer: answer,
+          answererId: user._id
+        });
+      } catch (error) {
+        console.error('Error handling offer:', error);
+      }
+    });
+
+    socket.on('answer', async (data) => {
+      try {
+        console.log('Received answer from:', data.answererId);
+        if (!peerConnectionRef.current) return;
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+      } catch (error) {
+        console.error('Error handling answer:', error);
+      }
+    });
+
+    socket.on('ice-candidate', async (data) => {
+      try {
+        console.log('Received ICE candidate from:', data.fromUserId);
+        if (!peerConnectionRef.current) return;
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (error) {
+        console.error('Error handling ICE candidate:', error);
+      }
+    });
+
+    socket.on('call-ended', (data) => {
+      handleEndCall();
+    });
+
     initializeCall();
+    
     return () => {
       cleanup();
+      socket.disconnect();
     };
-  }, [callId]);
+  }, [callId, user._id]);
 
   useEffect(() => {
     if (isConnected) {
@@ -79,6 +137,7 @@ const VideoCall = ({
 
       // Handle remote stream
       peerConnection.ontrack = (event) => {
+        console.log('Received remote stream:', event.streams[0]);
         setRemoteStream(event.streams[0]);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
@@ -98,17 +157,28 @@ const VideoCall = ({
 
       // Handle connection state changes
       peerConnection.onconnectionstatechange = () => {
+        console.log('Connection state:', peerConnection.connectionState);
         if (peerConnection.connectionState === 'connected') {
           setIsConnected(true);
+          setIsLoading(false);
+        } else if (peerConnection.connectionState === 'failed') {
+          console.error('WebRTC connection failed');
           setIsLoading(false);
         }
       };
 
+      // Handle ICE connection state
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log('ICE connection state:', peerConnection.iceConnectionState);
+      };
+
       // If not incoming call, create offer
       if (!isIncoming) {
+        console.log('Creating offer for call...');
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         
+        console.log('Sending offer to:', targetUser._id);
         socketRef.current?.emit('offer', {
           targetUserId: targetUser._id,
           offer: offer,

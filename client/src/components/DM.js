@@ -13,7 +13,8 @@ const DM = ({
   messageText,
   setMessageText,
   user,
-  chatLoading
+  chatLoading,
+  onNavigateToProfile
 }) => {
   const [callType, setCallType] = useState(null); // 'voice' | 'video' | null
   const [callActive, setCallActive] = useState(false);
@@ -156,24 +157,25 @@ const DM = ({
         {inbox.length === 0 ? (
           <div className="p-4 text-gray-400 dark:text-gray-500 text-center">No conversations yet.</div>
         ) : (
-          inbox.map(conv => (
+          inbox.map(chatUser => (
             <div
-              key={conv.user._id || conv.user}
-              className={`flex items-center space-x-3 px-4 py-3 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 ${activeChat && conv.user._id === activeChat._id ? 'bg-blue-100 dark:bg-blue-900/30' : ''}`}
-              onClick={() => onSelectChat(conv.user)}
+              key={chatUser._id}
+              className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+              onClick={() => onSelectChat(chatUser)}
             >
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-semibold text-sm">
-                  {conv.user.username?.charAt(0).toUpperCase()}
-                </span>
+              <div
+                className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden mr-3"
+                onClick={e => { e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); }}
+                title="View profile"
+                style={{ cursor: 'pointer' }}
+              >
+                {chatUser.profileImage ? (
+                  <img src={chatUser.profileImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <span className="text-white font-bold text-lg">{chatUser.username?.charAt(0).toUpperCase()}</span>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-800 dark:text-white truncate">{conv.user.username}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{conv.lastMessage?.text || 'No messages yet.'}</div>
-              </div>
-              {conv.unread > 0 && (
-                <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 font-bold">{conv.unread}</span>
-              )}
+              <span className="font-medium text-gray-900 dark:text-white">{chatUser.username}</span>
             </div>
           ))
         )}

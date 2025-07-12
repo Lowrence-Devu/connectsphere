@@ -80,14 +80,23 @@ const Post = ({
             ) : (
               comments.map(comment => (
                 <div key={comment._id} className="flex items-start space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
+                  <div 
+                    className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center cursor-pointer"
+                    onClick={() => onNavigateToProfile(comment.author)}
+                    title="View profile"
+                  >
                     <span className="text-white font-semibold text-xs">
                       {comment.author?.username?.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className="font-semibold text-gray-800 dark:text-white">{comment.author?.username || 'Unknown'}</span>
+                      <span 
+                        className="font-semibold text-gray-800 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                        onClick={() => onNavigateToProfile(comment.author)}
+                      >
+                        {comment.author?.username || 'Unknown'}
+                      </span>
                       <span className="text-gray-400 dark:text-gray-500 text-xs">
                         {new Date(comment.createdAt).toLocaleString()}
                       </span>

@@ -22,15 +22,12 @@ function App() {
     return u;
   });
   const [posts, setPosts] = useState([]);
-  const [text, setText] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [postsLoading, setPostsLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [comments, setComments] = useState({});
   const [commentText, setCommentText] = useState({});
   const [showComments, setShowComments] = useState({});
@@ -44,7 +41,7 @@ function App() {
   const [userPosts, setUserPosts] = useState([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [searchHistory, setSearchHistory] = useState(JSON.parse(localStorage.getItem('searchHistory') || '[]'));
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters] = useState(false);
   const [filters, setFilters] = useState({
     sortBy: 'username', // 'username', 'followers', 'recent'
     minFollowers: '',
@@ -289,7 +286,6 @@ function App() {
   }, [showSearch]);
 
   const fetchPosts = async () => {
-    setPostsLoading(true);
     try {
       console.log('Fetching posts from:', `${API_URL}/posts`);
       const res = await fetch(`${API_URL}/posts`);
@@ -302,8 +298,6 @@ function App() {
     } catch (err) {
       console.error('Failed to fetch posts:', err);
       setError('Failed to load posts. Please check your connection.');
-    } finally {
-      setPostsLoading(false);
     }
   };
 
@@ -1007,22 +1001,17 @@ function App() {
                           <div
                             key={user._id}
                             className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer"
-                            onClick={async () => await navigateToProfile(user)}
+                            onClick={e => { e.stopPropagation(); navigateToProfile(user); setShowSearch(false); }}
                           >
-                            <div 
-                              className="flex items-center space-x-3 flex-1"
-                            >
-                              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                                <span className="text-white font-semibold text-sm">
-                                  {user.username?.charAt(0).toUpperCase()}
-                                </span>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden">
+                                {user.profileImage ? (
+                                  <img src={user.profileImage} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                  <span className="text-white font-bold text-lg">{user.username?.charAt(0).toUpperCase()}</span>
+                                )}
                               </div>
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-800 dark:text-white">{user.username}</div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  {user.followers?.length || 0} followers • {user.following?.length || 0} following
-                                </div>
-                              </div>
+                              <span className="font-medium text-gray-900 dark:text-white">{user.username}</span>
                             </div>
                             {user._id !== user?.id && (
                               <button
@@ -1205,7 +1194,12 @@ function App() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-gray-900 dark:text-white">
-                                  <span className="font-medium">{notification.sender?.username}</span>
+                                  <span 
+                                    className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                                    onClick={(e) => { e.stopPropagation(); navigateToProfile(notification.sender); }}
+                                  >
+                                    {notification.sender?.username}
+                                  </span>
                                   {' '}
                                   {notification.type === 'like' && 'liked your post'}
                                   {notification.type === 'comment' && 'commented on your post'}
@@ -1294,6 +1288,7 @@ function App() {
             setMessageText={setMessageText}
             user={user}
             chatLoading={chatLoading}
+            onNavigateToProfile={navigateToProfile}
           />
         ) : currentView === 'explore' ? (
           <Explore
@@ -1399,6 +1394,7 @@ function App() {
             onReelView={handleReelView}
             onCreateReel={() => setShowCreateReelModal(true)}
             onDeleteReel={handleDeleteReel}
+            onNavigateToProfile={navigateToProfile}
           />
         ) : null}
         {showPostModal && selectedPost && (

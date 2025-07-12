@@ -37,6 +37,7 @@ const Feed = ({
         onCreateStory={onCreateStory}
         onDeleteStory={onDeleteStory}
         user={user}
+        onNavigateToProfile={onNavigateToProfile}
       />
       
       {posts.map(post => (

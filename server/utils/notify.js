@@ -53,7 +53,7 @@ async function notify({ type, sender, receiver, post = null, comment = null, req
       });
     }
 
-    // Send push notification if FCM token exists
+    // Send push notification if FCM token exists and Firebase is configured
     if (recipientUser.fcmToken) {
       try {
         const pushNotification = {
@@ -69,8 +69,13 @@ async function notify({ type, sender, receiver, post = null, comment = null, req
           }
         };
 
-        await pushNotificationService.sendNotification(recipientUser.fcmToken, pushNotification);
-        console.log('Push notification sent to:', recipientUser._id);
+        const result = await pushNotificationService.sendNotification(recipientUser.fcmToken, pushNotification);
+        
+        if (result.success === false) {
+          console.log('Push notification skipped:', result.message);
+        } else {
+          console.log('Push notification sent to:', recipientUser._id);
+        }
       } catch (pushError) {
         console.error('Push notification error:', pushError);
         // Don't fail the entire notification if push fails

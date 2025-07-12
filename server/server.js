@@ -160,28 +160,32 @@ io.on('connection', (socket) => {
   
   // WebRTC signaling
   socket.on('offer', (data) => {
-    socket.to(data.targetUserId).emit('offer', {
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('offer', {
       offer: data.offer,
       callerId: data.callerId
     });
   });
   
   socket.on('answer', (data) => {
-    socket.to(data.targetUserId).emit('answer', {
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('answer', {
       answer: data.answer,
       answererId: data.answererId
     });
   });
   
   socket.on('ice-candidate', (data) => {
-    socket.to(data.targetUserId).emit('ice-candidate', {
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('ice-candidate', {
       candidate: data.candidate,
       fromUserId: data.fromUserId
     });
   });
   
   socket.on('call-ended', (data) => {
-    socket.to(data.targetUserId).emit('call-ended', {
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('call-ended', {
       callId: data.callId,
       endedBy: data.endedBy
     });

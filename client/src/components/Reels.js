@@ -8,7 +8,8 @@ const Reels = ({
   onDelete,
   user,
   currentReelIndex = 0,
-  onReelChange
+  onReelChange,
+  onNavigateToProfile
 }) => {
   const [currentIndex, setCurrentIndex] = useState(currentReelIndex);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -125,7 +126,11 @@ const Reels = ({
       <div className="absolute right-4 bottom-20 flex flex-col items-center space-y-6">
         {/* Author Info */}
         <div className="flex flex-col items-center space-y-2">
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white">
+          <div 
+            className="w-12 h-12 rounded-full overflow-hidden border-2 border-white cursor-pointer"
+            onClick={() => onNavigateToProfile && onNavigateToProfile(currentReel.author)}
+            title="View profile"
+          >
             <img
               src={currentReel.author.profileImage || 'https://via.placeholder.com/48x48'}
               alt={currentReel.author.username}
@@ -133,7 +138,10 @@ const Reels = ({
             />
           </div>
           <div className="text-center">
-            <div className="text-white font-semibold text-sm">
+            <div 
+              className="text-white font-semibold text-sm cursor-pointer hover:text-blue-300"
+              onClick={() => onNavigateToProfile && onNavigateToProfile(currentReel.author)}
+            >
               {currentReel.author.username}
             </div>
           </div>
@@ -189,7 +197,12 @@ const Reels = ({
       {/* Bottom Info */}
       <div className="absolute bottom-4 left-4 right-20 text-white">
         <div className="mb-2">
-          <span className="font-semibold">{currentReel.author.username}</span>
+          <span 
+            className="font-semibold cursor-pointer hover:text-blue-300"
+            onClick={() => onNavigateToProfile && onNavigateToProfile(currentReel.author)}
+          >
+            {currentReel.author.username}
+          </span>
           {currentReel.caption && (
             <span className="ml-2">{currentReel.caption}</span>
           )}
