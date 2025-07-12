@@ -84,16 +84,17 @@ export const useVideoCall = (user, activeChat) => {
         ringtoneRef.current.onerror = () => {
           console.log('Ringtone not found, using system beep');
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
-          oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+          let oscillator = null;
           let started = false;
+          const gainNode = audioContext.createGain();
+          gainNode.connect(audioContext.destination);
           ringtoneRef.current = {
             play: () => {
-              if (!started) {
+              if (!oscillator) {
+                oscillator = audioContext.createOscillator();
+                oscillator.connect(gainNode);
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
                 try {
                   oscillator.start();
                   started = true;
@@ -103,17 +104,18 @@ export const useVideoCall = (user, activeChat) => {
               }
             },
             pause: () => {
-              if (started) {
+              if (oscillator && started) {
                 try {
                   oscillator.stop();
-                  started = false;
                 } catch (e) {
                   console.log('Oscillator stop failed:', e);
                 }
+                oscillator = null;
+                started = false;
               }
             },
             currentTime: 0,
-            oscillator
+            get oscillator() { return oscillator; }
           };
         };
         
@@ -123,27 +125,40 @@ export const useVideoCall = (user, activeChat) => {
         callEndRef.current.onerror = () => {
           console.log('Call end sound not found, using system beep');
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          const oscillator = audioContext.createOscillator();
+          let oscillator = null;
+          let started = false;
           const gainNode = audioContext.createGain();
-          oscillator.connect(gainNode);
           gainNode.connect(audioContext.destination);
-          oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
-          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-          callEndRef.current = { 
+          callEndRef.current = {
             play: () => {
-              try {
-                oscillator.start();
-                setTimeout(() => {
-                  try { oscillator.stop(); } catch (e) {}
-                }, 200);
-              } catch (e) {
-                console.log('Call end oscillator failed:', e);
+              if (!oscillator) {
+                oscillator = audioContext.createOscillator();
+                oscillator.connect(gainNode);
+                oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                try {
+                  oscillator.start();
+                  started = true;
+                  setTimeout(() => {
+                    if (oscillator && started) {
+                      try { oscillator.stop(); } catch (e) {}
+                      oscillator = null;
+                      started = false;
+                    }
+                  }, 200);
+                } catch (e) {
+                  console.log('Call end oscillator failed:', e);
+                }
               }
-            }, 
+            },
             pause: () => {
-              try { oscillator.stop(); } catch (e) {}
-            }, 
-            currentTime: 0 
+              if (oscillator && started) {
+                try { oscillator.stop(); } catch (e) {}
+                oscillator = null;
+                started = false;
+              }
+            },
+            currentTime: 0
           };
         };
         
