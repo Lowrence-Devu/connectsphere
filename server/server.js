@@ -159,6 +159,17 @@ io.on('connection', (socket) => {
     console.log(`ICE candidate from ${from} to ${to}`);
     io.to(String(to)).emit('ice-candidate', { from, candidate });
   });
+  
+  // Handle ICE candidates from simple-peer
+  socket.on('ice-candidate', (data) => {
+    if (data.to && data.from && data.candidate) {
+      console.log(`ICE candidate from ${data.from} to ${data.to}`);
+      io.to(String(data.to)).emit('ice-candidate', { 
+        from: data.from, 
+        candidate: data.candidate 
+      });
+    }
+  });
 
   // Video call room management
   socket.on('join-call', (callId) => {

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useVideoCall } from '../hooks/useVideoCall';
+import VideoCallDebug from './VideoCallDebug';
 
 const VideoCall = ({ user, activeChat, onClose }) => {
   const {
@@ -24,14 +25,24 @@ const VideoCall = ({ user, activeChat, onClose }) => {
 
   const localVideoRef = useRef();
   const remoteVideoRef = useRef();
+  const localAudioRef = useRef();
+  const remoteAudioRef = useRef();
 
-  // Update video elements when streams change
+  // Update video and audio elements when streams change
   useEffect(() => {
     if (localVideoRef.current && stream && callType === 'video') {
       localVideoRef.current.srcObject = stream;
     }
     if (remoteVideoRef.current && remoteStream && callType === 'video') {
       remoteVideoRef.current.srcObject = remoteStream;
+    }
+    
+    // Handle audio for voice calls
+    if (localAudioRef.current && stream && callType === 'voice') {
+      localAudioRef.current.srcObject = stream;
+    }
+    if (remoteAudioRef.current && remoteStream && callType === 'voice') {
+      remoteAudioRef.current.srcObject = remoteStream;
     }
   }, [stream, remoteStream, callType]);
 
@@ -68,6 +79,19 @@ const VideoCall = ({ user, activeChat, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+      {/* Debug Panel */}
+      <VideoCallDebug
+        callType={callType}
+        callActive={callActive}
+        connectionStatus={connectionStatus}
+        callQuality={callQuality}
+        stream={stream}
+        remoteStream={remoteStream}
+        peer={peer}
+        user={user}
+        activeChat={activeChat}
+      />
+      
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -137,6 +161,10 @@ const VideoCall = ({ user, activeChat, onClose }) => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center space-y-4">
+                  {/* Hidden audio elements for voice calls */}
+                  <audio ref={localAudioRef} autoPlay muted />
+                  <audio ref={remoteAudioRef} autoPlay />
+                  
                   <div className="w-32 h-32 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-6xl">🎤</span>
                   </div>

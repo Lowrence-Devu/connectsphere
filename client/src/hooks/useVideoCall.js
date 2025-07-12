@@ -79,6 +79,7 @@ export const useVideoCall = (user, activeChat) => {
     
     // Enhanced incoming call handling with ring sound
     socket.on('call:incoming', ({ from, callType }) => {
+      console.log('Incoming call from:', from, 'type:', callType);
       setIncomingCall({ from, callType });
       // Play ringtone
       if (ringtoneRef.current) {
@@ -88,6 +89,7 @@ export const useVideoCall = (user, activeChat) => {
     
     // Enhanced call acceptance
     socket.on('call:accepted', ({ from }) => {
+      console.log('Call accepted by:', from);
       if (peer) {
         peer.signal(peer._lastOffer);
         setConnectionStatus('connected');
@@ -99,16 +101,22 @@ export const useVideoCall = (user, activeChat) => {
       }
     });
     
-    // Enhanced signal handling
+    // Enhanced signal handling - FIXED: Proper signal handling
     socket.on('call:signal', ({ from, signal }) => {
+      console.log('Received signal from:', from);
       if (peer) {
-        peer.signal(signal);
-        setConnectionStatus('connected');
+        try {
+          peer.signal(signal);
+          setConnectionStatus('connected');
+        } catch (err) {
+          console.error('Error signaling peer:', err);
+        }
       }
     });
     
     // Enhanced call ending
     socket.on('call:ended', ({ from }) => {
+      console.log('Call ended by:', from);
       endCall();
       // Play call end sound
       if (callEndRef.current) {
@@ -116,10 +124,15 @@ export const useVideoCall = (user, activeChat) => {
       }
     });
     
-    // ICE candidate handling for better connection
-    socket.on('ice-candidate', ({ candidate, fromUserId }) => {
-      if (peer && fromUserId === (activeChat?._id || incomingCall?.from)) {
-        peer.signal({ type: 'candidate', candidate });
+    // ICE candidate handling for better connection - FIXED: Proper ICE handling
+    socket.on('ice-candidate', ({ from, candidate }) => {
+      console.log('ICE candidate from:', from);
+      if (peer && from === (activeChat?._id || incomingCall?.from)) {
+        try {
+          peer.signal({ type: 'candidate', candidate });
+        } catch (err) {
+          console.error('Error handling ICE candidate:', err);
+        }
       }
     });
     
@@ -180,6 +193,7 @@ export const useVideoCall = (user, activeChat) => {
 
   const startCall = useCallback(async (type) => {
     try {
+      console.log('Starting call:', type);
       setCallType(type);
       setCallActive(true);
       setConnectionStatus('connecting');
@@ -204,6 +218,7 @@ export const useVideoCall = (user, activeChat) => {
       });
       
       newPeer.on('signal', (signal) => {
+        console.log('Sending signal for call:', type);
         newPeer._lastOffer = signal;
         socket.emit('call:request', {
           to: activeChat._id,
@@ -218,11 +233,13 @@ export const useVideoCall = (user, activeChat) => {
       });
       
       newPeer.on('stream', (remote) => {
+        console.log('Received remote stream');
         setRemoteStream(remote);
         setConnectionStatus('connected');
       });
       
       newPeer.on('connect', () => {
+        console.log('Peer connected');
         setConnectionStatus('connected');
       });
       
@@ -242,6 +259,7 @@ export const useVideoCall = (user, activeChat) => {
 
   const acceptCall = useCallback(async () => {
     try {
+      console.log('Accepting call:', incomingCall.callType);
       setCallType(incomingCall.callType);
       setCallActive(true);
       setConnectionStatus('connecting');
@@ -273,6 +291,7 @@ export const useVideoCall = (user, activeChat) => {
       });
       
       newPeer.on('signal', (signal) => {
+        console.log('Sending signal for accepted call');
         socket.emit('call:signal', {
           to: incomingCall.from,
           from: user._id,
@@ -281,16 +300,18 @@ export const useVideoCall = (user, activeChat) => {
       });
       
       newPeer.on('stream', (remote) => {
+        console.log('Received remote stream in accepted call');
         setRemoteStream(remote);
         setConnectionStatus('connected');
       });
       
       newPeer.on('connect', () => {
+        console.log('Peer connected in accepted call');
         setConnectionStatus('connected');
       });
       
       newPeer.on('error', (err) => {
-        console.error('Peer connection error:', err);
+        console.error('Peer connection error in accepted call:', err);
         setConnectionStatus('disconnected');
       });
       
@@ -308,6 +329,7 @@ export const useVideoCall = (user, activeChat) => {
   }, [incomingCall, user]);
 
   const declineCall = useCallback(() => {
+    console.log('Declining call');
     setIncomingCall(null);
     // Stop ringtone
     if (ringtoneRef.current) {
@@ -321,6 +343,7 @@ export const useVideoCall = (user, activeChat) => {
   }, [incomingCall, user]);
 
   const endCall = useCallback(() => {
+    console.log('Ending call');
     setCallActive(false);
     setCallType(null);
     setRemoteStream(null);
