@@ -68,7 +68,7 @@ const DM = ({
                 className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                 onClick={() => {
                   onSelectChat(chatUser);
-                  if (isMobile) setMobileView('chat');
+                  setMobileView('chat'); // Always set to 'chat' on user select (fix for mobile)
                 }}
               >
                 <div
