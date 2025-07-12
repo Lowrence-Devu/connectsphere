@@ -1,232 +1,102 @@
-import { useState, useEffect, useCallback } from 'react';
-import { requestNotificationPermission, onMessageListener } from '../firebase';
+import { useEffect, useState } from 'react';
 
-const usePushNotifications = (user, token) => {
-  const [fcmToken, setFcmToken] = useState(null);
-  const [notificationPermission, setNotificationPermission] = useState('default');
-  const [isLoading, setIsLoading] = useState(false);
+export const usePushNotifications = () => {
+  const [permission, setPermission] = useState('default');
+  const [subscription, setSubscription] = useState(null);
 
-  // Request notification permission and get FCM token
-  const requestPermission = useCallback(async () => {
+  useEffect(() => {
+    // Check if the browser supports notifications
+    if (!('Notification' in window)) {
+      console.log('This browser does not support notifications');
+      return;
+    }
+
+    // Set initial permission state
+    setPermission(Notification.permission);
+
+    // Request permission if not granted
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then((permission) => {
+        setPermission(permission);
+      });
+    }
+  }, []);
+
+  // Function to show incoming call notification
+  const showIncomingCallNotification = (callerName, callType) => {
+    if (Notification.permission === 'granted') {
+      const notification = new Notification('Incoming Call', {
+        body: `${callerName} is calling you (${callType === 'voice' ? 'Voice' : 'Video'} call)`,
+        icon: '/logo192.png', // Use your app's icon
+        badge: '/logo192.png',
+        tag: 'incoming-call', // Prevents multiple notifications
+        requireInteraction: true, // Notification stays until user interacts
+        actions: [
+          {
+            action: 'accept',
+            title: 'Accept',
+            icon: '/accept-call.png' // You can add custom icons
+          },
+          {
+            action: 'decline',
+            title: 'Decline',
+            icon: '/decline-call.png'
+          }
+        ]
+      });
+
+      // Handle notification clicks
+      notification.onclick = (event) => {
+        // Focus the window/tab
+        window.focus();
+        
+        // You can add custom handling here
+        console.log('Notification clicked:', event);
+      };
+
+      // Handle notification action clicks
+      notification.onactionclick = (event) => {
+        console.log('Notification action clicked:', event.action);
+        // You can trigger accept/decline actions here
+      };
+
+      return notification;
+    }
+  };
+
+  // Function to show general notification
+  const showNotification = (title, options = {}) => {
+    if (Notification.permission === 'granted') {
+      return new Notification(title, {
+        icon: '/logo192.png',
+        badge: '/logo192.png',
+        ...options
+      });
+    }
+  };
+
+  // Function to request notification permission
+  const requestPermission = async () => {
+    if (!('Notification' in window)) {
+      console.log('This browser does not support notifications');
+      return false;
+    }
+
     try {
-      setIsLoading(true);
-      const token = await requestNotificationPermission();
-      if (token) {
-        setFcmToken(token);
-        setNotificationPermission('granted');
-        
-        // Send FCM token to server
-        if (user && token) {
-          await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/push-notifications/fcm-token`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ fcmToken: token })
-          });
-        }
-        
-        return token;
-      } else {
-        setNotificationPermission('denied');
-        return null;
-      }
+      const permission = await Notification.requestPermission();
+      setPermission(permission);
+      return permission === 'granted';
     } catch (error) {
       console.error('Error requesting notification permission:', error);
-      setNotificationPermission('denied');
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, token]);
-
-  // Handle foreground messages
-  useEffect(() => {
-    if (notificationPermission === 'granted') {
-      onMessageListener()
-        .then((payload) => {
-          console.log('Received foreground message:', payload);
-          
-          // Show custom notification
-          if (payload.notification) {
-            const { title, body } = payload.notification;
-            const notification = new Notification(title, {
-              body,
-              icon: '/logo192.png',
-              badge: '/logo192.png',
-              data: payload.data
-            });
-
-            // Handle notification click
-            notification.onclick = () => {
-              window.focus();
-              notification.close();
-              
-              // Handle different notification types
-              if (payload.data?.type) {
-                handleNotificationClick(payload.data);
-              }
-            };
-          }
-        })
-        .catch((error) => {
-          console.error('Error handling foreground message:', error);
-        });
-    }
-  }, [notificationPermission]);
-
-  // Handle notification clicks
-  const handleNotificationClick = (data) => {
-    switch (data.type) {
-      case 'like':
-      case 'comment':
-        // Navigate to post
-        if (data.postId) {
-          // You can implement navigation logic here
-          console.log('Navigate to post:', data.postId);
-        }
-        break;
-      case 'follow':
-        // Navigate to user profile
-        if (data.senderId) {
-          console.log('Navigate to user profile:', data.senderId);
-        }
-        break;
-      case 'message':
-        // Navigate to messages
-        console.log('Navigate to messages');
-        break;
-      case 'video_call':
-        // Handle video call notification
-        console.log('Handle video call notification');
-        break;
-      default:
-        console.log('Unknown notification type:', data.type);
-    }
-  };
-
-  // Update notification settings
-  const updateNotificationSettings = async (settings) => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/push-notifications/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ notificationSettings: settings })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update notification settings');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating notification settings:', error);
-      throw error;
-    }
-  };
-
-  // Get notification settings
-  const getNotificationSettings = async () => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/push-notifications/settings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to get notification settings');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting notification settings:', error);
-      throw error;
-    }
-  };
-
-  // Send test notification
-  const sendTestNotification = async () => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/push-notifications/test`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to send test notification');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error sending test notification:', error);
-      throw error;
-    }
-  };
-
-  // Subscribe to topic
-  const subscribeToTopic = async (topic) => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/push-notifications/subscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ topic })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to subscribe to topic');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error subscribing to topic:', error);
-      throw error;
-    }
-  };
-
-  // Unsubscribe from topic
-  const unsubscribeFromTopic = async (topic) => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/push-notifications/unsubscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ topic })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to unsubscribe from topic');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error unsubscribing from topic:', error);
-      throw error;
+      return false;
     }
   };
 
   return {
-    fcmToken,
-    notificationPermission,
-    isLoading,
-    requestPermission,
-    updateNotificationSettings,
-    getNotificationSettings,
-    sendTestNotification,
-    subscribeToTopic,
-    unsubscribeFromTopic
+    permission,
+    subscription,
+    showIncomingCallNotification,
+    showNotification,
+    requestPermission
   };
-};
-
-export default usePushNotifications; 
+}; 

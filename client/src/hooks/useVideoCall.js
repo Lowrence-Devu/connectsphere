@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Peer from 'simple-peer';
 import io from 'socket.io-client';
+import { usePushNotifications } from './usePushNotifications';
 
 const socket = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000');
 
 export const useVideoCall = (user, activeChat) => {
   const [callType, setCallType] = useState(null); // 'voice' | 'video' | null
   const [callActive, setCallActive] = useState(false);
+  const [calling, setCalling] = useState(false); // New state for when user is calling but not connected
   const [incomingCall, setIncomingCall] = useState(null);
   const [peer, setPeer] = useState(null);
   const [stream, setStream] = useState(null);
@@ -25,6 +27,10 @@ export const useVideoCall = (user, activeChat) => {
   const callTimerRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const qualityCheckIntervalRef = useRef(null);
+  const notificationRef = useRef(null);
+  
+  // Get push notification functions
+  const { showIncomingCallNotification, showNotification } = usePushNotifications();
   
   // Initialize audio elements with better error handling
   useEffect(() => {
@@ -190,6 +196,12 @@ export const useVideoCall = (user, activeChat) => {
       console.log('[Socket] Incoming call from:', from, 'type:', callType);
       setIncomingCall({ from, callType });
       setError(null);
+      
+      // Show browser notification for incoming call
+      if (activeChat?.username) {
+        notificationRef.current = showIncomingCallNotification(activeChat.username, callType);
+      }
+      
       if (ringtoneRef.current) {
         ringtoneRef.current.play().catch(err => console.log('Ringtone play failed:', err));
       }
@@ -209,6 +221,11 @@ export const useVideoCall = (user, activeChat) => {
       if (ringtoneRef.current) {
         ringtoneRef.current.pause();
         ringtoneRef.current.currentTime = 0;
+      }
+      // Close browser notification if exists
+      if (notificationRef.current) {
+        notificationRef.current.close();
+        notificationRef.current = null;
       }
     };
 
@@ -231,6 +248,11 @@ export const useVideoCall = (user, activeChat) => {
       endCall();
       if (callEndRef.current) {
         callEndRef.current.play().catch(err => console.log('Call end sound failed:', err));
+      }
+      // Close browser notification if exists
+      if (notificationRef.current) {
+        notificationRef.current.close();
+        notificationRef.current = null;
       }
     };
 
@@ -345,6 +367,7 @@ export const useVideoCall = (user, activeChat) => {
       console.log('Starting call:', type);
       setCallType(type);
       setCallActive(true);
+      setCalling(true); // Set calling state
       setConnectionStatus('connecting');
       setError(null);
       
@@ -408,24 +431,28 @@ export const useVideoCall = (user, activeChat) => {
         console.log('Received remote stream');
         setRemoteStream(remote);
         setConnectionStatus('connected');
+        setCalling(false); // Clear calling state when connected
         setError(null);
       });
       
       newPeer.on('connect', () => {
         console.log('Peer connected');
         setConnectionStatus('connected');
+        setCalling(false); // Clear calling state when connected
         setError(null);
       });
       
       newPeer.on('error', (err) => {
         console.error('Peer connection error:', err);
         setConnectionStatus('disconnected');
+        setCalling(false); // Clear calling state on error
         setError('Connection failed. Please check your internet connection and try again.');
       });
       
       newPeer.on('close', () => {
         console.log('Peer connection closed');
         setConnectionStatus('disconnected');
+        setCalling(false); // Clear calling state when closed
       });
       
       setPeer(newPeer);
@@ -433,6 +460,7 @@ export const useVideoCall = (user, activeChat) => {
       console.error('Failed to start call:', err);
       setCallActive(false);
       setCallType(null);
+      setCalling(false); // Clear calling state on error
       setConnectionStatus('disconnected');
       setError('Failed to access camera/microphone. Please check permissions and try again.');
     }
@@ -551,6 +579,11 @@ export const useVideoCall = (user, activeChat) => {
       ringtoneRef.current.pause();
       ringtoneRef.current.currentTime = 0;
     }
+    // Close browser notification if exists
+    if (notificationRef.current) {
+      notificationRef.current.close();
+      notificationRef.current = null;
+    }
     socket.emit('call:end', {
       to: incomingCall.from,
       from: user._id
@@ -562,6 +595,7 @@ export const useVideoCall = (user, activeChat) => {
     console.log('Ending call');
     setCallActive(false);
     setCallType(null);
+    setCalling(false); // Clear calling state
     setRemoteStream(null);
     setStream(null);
     setConnectionStatus('disconnected');
@@ -600,6 +634,12 @@ export const useVideoCall = (user, activeChat) => {
         ringtoneRef.current.pause();
         ringtoneRef.current.currentTime = 0;
       } catch (e) {}
+    }
+    
+    // Close browser notification if exists
+    if (notificationRef.current) {
+      notificationRef.current.close();
+      notificationRef.current = null;
     }
     
     socket.emit('call:end', {
@@ -693,6 +733,7 @@ export const useVideoCall = (user, activeChat) => {
   return {
     callType,
     callActive,
+    calling,
     incomingCall,
     stream,
     remoteStream,

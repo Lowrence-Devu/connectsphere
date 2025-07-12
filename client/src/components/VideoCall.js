@@ -306,7 +306,7 @@ const VideoCall = ({ user, activeChat, onClose }) => {
             /* Incoming Call UI */
             <div className="flex flex-col items-center space-y-6">
               <div className="text-center">
-                <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                   <span className="text-4xl">
                     {incomingCall?.callType === 'voice' ? '📞' : '🎥'}
                   </span>
@@ -316,6 +316,9 @@ const VideoCall = ({ user, activeChat, onClose }) => {
                 </h3>
                 <p className="text-gray-600 dark:text-gray-400">
                   {activeChat?.username} is calling...
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                  {incomingCall?.callType === 'voice' ? 'Voice call' : 'Video call'} • {new Date().toLocaleTimeString()}
                 </p>
               </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideoCall } from '../hooks/useVideoCall';
 import VideoCall from './VideoCall';
+import CallingWindow from './CallingWindow';
 
 const DM = ({
   inbox = [],
@@ -22,7 +23,11 @@ const DM = ({
   const {
     callType,
     callActive,
+    calling,
     incomingCall,
+    stream,
+    connectionStatus,
+    callDuration,
     startCall,
     acceptCall,
     declineCall,
@@ -46,12 +51,12 @@ const DM = ({
 
   // Handle call state changes
   useEffect(() => {
-    if (callActive || incomingCall) {
+    if (callActive || incomingCall || calling) {
       setShowVideoCall(true);
     } else {
       setShowVideoCall(false);
     }
-  }, [callActive, incomingCall]);
+  }, [callActive, incomingCall, calling]);
 
   useEffect(() => {
     // Debug: Log inbox data to inspect structure
@@ -214,11 +219,27 @@ const DM = ({
               </form>
               {/* Enhanced Video Call Component */}
               {showVideoCall && (
-                <VideoCall
-                  user={user}
-                  activeChat={activeChat}
-                  onClose={() => setShowVideoCall(false)}
-                />
+                <>
+                  {calling ? (
+                    <CallingWindow
+                      callType={callType}
+                      targetUser={activeChat}
+                      onCancel={endCall}
+                      stream={stream}
+                      callDuration={callDuration}
+                      connectionStatus={connectionStatus}
+                    />
+                  ) : (
+                    <VideoCall
+                      user={user}
+                      activeChat={activeChat}
+                      onClose={() => {
+                        setShowVideoCall(false);
+                        endCall();
+                      }}
+                    />
+                  )}
+                </>
               )}
             </>
           ) : (
