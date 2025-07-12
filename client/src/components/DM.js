@@ -53,6 +53,13 @@ const DM = ({
     }
   }, [callActive, incomingCall]);
 
+  useEffect(() => {
+    // Debug: Log inbox data to inspect structure
+    if (inbox && inbox.length > 0) {
+      console.log('DM Inbox Data:', inbox);
+    }
+  }, [inbox]);
+
   return (
     <div className="flex flex-col sm:flex-row h-[70vh] bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
       {/* Sidebar: Inbox */}
@@ -68,8 +75,8 @@ const DM = ({
               const unread = convo.unread;
               return (
                 <div
-                  key={chatUser._id}
-                  className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  key={chatUser?._id || Math.random()}
+                  className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser?._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                   onClick={() => {
                     onSelectChat(chatUser);
                     setMobileView('chat');
@@ -77,7 +84,7 @@ const DM = ({
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectChat(chatUser); setMobileView('chat'); } }}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Open chat with ${chatUser.username}`}
+                  aria-label={`Open chat with ${chatUser?.username || 'Unknown User'}`}
                 >
                   <div
                     className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden mr-3 shadow-md border-2 border-white dark:border-gray-900"
@@ -87,26 +94,28 @@ const DM = ({
                     style={{ cursor: 'pointer' }}
                     tabIndex={0}
                     role="button"
-                    aria-label={`View ${chatUser.username}'s profile`}
+                    aria-label={`View ${chatUser?.username || 'Unknown User'}'s profile`}
                   >
-                    {chatUser.profileImage ? (
+                    {chatUser?.profileImage ? (
                       <img src={chatUser.profileImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
                     ) : (
-                      <span className="text-white font-bold text-lg">{chatUser.username?.charAt(0).toUpperCase()}</span>
+                      <span className="text-white font-bold text-lg">{chatUser?.username?.charAt(0).toUpperCase() || '?'}</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900 dark:text-white truncate">{chatUser.username}</span>
+                      <span className="font-medium text-gray-900 dark:text-white truncate">{chatUser?.username || 'Unknown User'}</span>
                       {unread > 0 && (
                         <span className="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 font-semibold shadow-lg animate-pulse" aria-label={`${unread} unread messages`}>{unread}</span>
                       )}
                     </div>
-                    {lastMessage && (
+                    {lastMessage ? (
                       <div className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[180px] font-medium mt-0.5">
                         <span className="font-semibold text-blue-500 dark:text-blue-400">{lastMessage.sender && lastMessage.sender.username ? `${lastMessage.sender.username}: ` : ''}</span>
-                        <span>{lastMessage.text}</span>
+                        <span>{lastMessage.text || '[No message text]'}</span>
                       </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No messages yet.</div>
                     )}
                   </div>
                 </div>
