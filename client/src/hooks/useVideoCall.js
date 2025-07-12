@@ -32,7 +32,6 @@ export const useVideoCall = (user, activeChat) => {
     ringtoneRef.current.volume = 0.5;
     ringtoneRef.current.onerror = () => {
       console.log('Ringtone not found, using system beep');
-      // Create a simple beep sound using Web Audio API as fallback
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
@@ -40,7 +39,12 @@ export const useVideoCall = (user, activeChat) => {
       gainNode.connect(audioContext.destination);
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
       gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-      ringtoneRef.current = { play: () => oscillator.start(), pause: () => oscillator.stop(), currentTime: 0 };
+      ringtoneRef.current = {
+        play: () => oscillator.start(),
+        pause: () => oscillator.stop(),
+        currentTime: 0,
+        oscillator
+      };
     };
     
     callEndRef.current = new Audio();
@@ -70,6 +74,33 @@ export const useVideoCall = (user, activeChat) => {
       }
     };
   }, []);
+
+  // Add debug logs for local and remote stream events
+  useEffect(() => {
+    if (stream) {
+      console.log('Local stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+    }
+  }, [stream]);
+
+  useEffect(() => {
+    if (remoteStream) {
+      console.log('Remote stream tracks:', remoteStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+    }
+  }, [remoteStream]);
+
+  // Add debug log for mute state
+  useEffect(() => {
+    if (stream) {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        console.log('Local audio track enabled:', audioTrack.enabled, 'isMuted state:', isMuted);
+      }
+    }
+  }, [isMuted, stream]);
+
+  // Ensure both users always add their local audio stream to the Peer (already done, but add comments and logs)
+  // In startCall and acceptCall, after setStream(localStream):
+  // console.log('Adding local stream to Peer:', localStream);
 
   // Socket event listeners
   useEffect(() => {
@@ -191,6 +222,26 @@ export const useVideoCall = (user, activeChat) => {
     }
   }, [peer, remoteStream]);
 
+  // Always stop ringtone when call is active or connected
+  useEffect(() => {
+    if (callActive || connectionStatus === 'connected') {
+      if (ringtoneRef.current) {
+        try {
+          ringtoneRef.current.pause();
+          ringtoneRef.current.currentTime = 0;
+        } catch (e) {
+          // Fallback beep: try to stop oscillator if present
+          if (ringtoneRef.current && typeof ringtoneRef.current.pause === 'function') {
+            ringtoneRef.current.pause();
+          }
+          if (ringtoneRef.current && ringtoneRef.current.oscillator) {
+            try { ringtoneRef.current.oscillator.stop(); } catch (err) {}
+          }
+        }
+      }
+    }
+  }, [callActive, connectionStatus]);
+
   const startCall = useCallback(async (type) => {
     try {
       console.log('Starting call:', type);
@@ -204,6 +255,7 @@ export const useVideoCall = (user, activeChat) => {
       
       const localStream = await navigator.mediaDevices.getUserMedia(media);
       setStream(localStream);
+      console.log('Adding local stream to Peer:', localStream);
       
       const newPeer = new Peer({
         initiator: true,
@@ -277,6 +329,7 @@ export const useVideoCall = (user, activeChat) => {
       
       const localStream = await navigator.mediaDevices.getUserMedia(media);
       setStream(localStream);
+      console.log('Adding local stream to Peer:', localStream);
       
       const newPeer = new Peer({
         initiator: false,
