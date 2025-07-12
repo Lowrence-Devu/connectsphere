@@ -58,6 +58,20 @@ const DM = ({
     }
   }, [callActive, incomingCall, calling]);
 
+  // Ensure call UI shows when notification is clicked
+  useEffect(() => {
+    const handleNotificationClick = () => {
+      if (incomingCall) {
+        setShowVideoCall(true);
+      }
+    };
+
+    window.addEventListener('incomingCallClicked', handleNotificationClick);
+    return () => {
+      window.removeEventListener('incomingCallClicked', handleNotificationClick);
+    };
+  }, [incomingCall]);
+
   useEffect(() => {
     // Debug: Log inbox data to inspect structure
     if (inbox && inbox.length > 0) {

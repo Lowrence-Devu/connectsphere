@@ -9,6 +9,7 @@ import CreateReelModal from './components/CreateReelModal';
 import Reels from './components/Reels';
 import Explore from './components/Explore';
 import DM from './components/DM';
+import VideoCall from './components/VideoCall';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -282,6 +283,46 @@ function App() {
       };
     }
   }, [token, user?._id, activeChat]);
+
+  // Global call handling
+  useEffect(() => {
+    if (token && user?._id && socket.current) {
+      socket.current.on('call:incoming', ({ from, callType }) => {
+        console.log('[App] Global incoming call from:', from, 'type:', callType);
+        setGlobalIncomingCall({ from, callType });
+        setShowVideoCall(true);
+      });
+
+      socket.current.on('call:ended', ({ from }) => {
+        console.log('[App] Global call ended by:', from);
+        setGlobalIncomingCall(null);
+        setGlobalCallActive(false);
+        setGlobalCalling(false);
+        setShowVideoCall(false);
+      });
+
+      return () => {
+        if (socket.current) {
+          socket.current.off('call:incoming');
+          socket.current.off('call:ended');
+        }
+      };
+    }
+  }, [token, user?._id]);
+
+  // Handle notification clicks globally
+  useEffect(() => {
+    const handleNotificationClick = () => {
+      if (globalIncomingCall) {
+        setShowVideoCall(true);
+      }
+    };
+
+    window.addEventListener('incomingCallClicked', handleNotificationClick);
+    return () => {
+      window.removeEventListener('incomingCallClicked', handleNotificationClick);
+    };
+  }, [globalIncomingCall]);
 
   const handleSendMessage = () => {
     if (!messageText.trim() || !activeChat) return;
@@ -903,6 +944,11 @@ function App() {
     setEditEmail(user?.email || '');
     setEditIsPrivate(user?.isPrivate || false);
   }, [user]);
+
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
+  const [globalCallActive, setGlobalCallActive] = useState(false);
+  const [globalCalling, setGlobalCalling] = useState(false);
 
   if (!token) {
     return (
@@ -1684,6 +1730,18 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Global Video Call Component */}
+      {showVideoCall && globalIncomingCall && (
+        <VideoCall
+          user={user}
+          activeChat={{ _id: globalIncomingCall.from, username: 'Unknown User' }}
+          onClose={() => {
+            setShowVideoCall(false);
+            setGlobalIncomingCall(null);
+          }}
+        />
       )}
     </div>
   );

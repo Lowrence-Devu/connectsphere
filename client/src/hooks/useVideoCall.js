@@ -346,6 +346,24 @@ export const useVideoCall = (user, activeChat) => {
     };
   }, [user?._id, peer, activeChat, incomingCall]);
 
+  // Handle notification clicks
+  useEffect(() => {
+    const handleNotificationClick = (event) => {
+      console.log('[Notification] Clicked:', event.detail);
+      // Ensure the call UI is visible when notification is clicked
+      if (incomingCall) {
+        // The call UI should already be showing, but we can ensure it's focused
+        window.focus();
+      }
+    };
+
+    window.addEventListener('incomingCallClicked', handleNotificationClick);
+
+    return () => {
+      window.removeEventListener('incomingCallClicked', handleNotificationClick);
+    };
+  }, [incomingCall]);
+
   // Enhanced stream monitoring
   useEffect(() => {
     if (stream) {

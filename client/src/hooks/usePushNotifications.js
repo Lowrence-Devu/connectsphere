@@ -31,18 +31,13 @@ export const usePushNotifications = () => {
         badge: '/logo192.png',
         tag: 'incoming-call', // Prevents multiple notifications
         requireInteraction: true, // Notification stays until user interacts
-        actions: [
-          {
-            action: 'accept',
-            title: 'Accept',
-            icon: '/accept-call.png' // You can add custom icons
-          },
-          {
-            action: 'decline',
-            title: 'Decline',
-            icon: '/decline-call.png'
-          }
-        ]
+        silent: false, // Allow sound
+        vibrate: [200, 100, 200], // Vibration pattern
+        data: {
+          type: 'incoming-call',
+          callerName,
+          callType
+        }
       });
 
       // Handle notification clicks
@@ -50,14 +45,21 @@ export const usePushNotifications = () => {
         // Focus the window/tab
         window.focus();
         
+        // Close the notification
+        notification.close();
+        
         // You can add custom handling here
         console.log('Notification clicked:', event);
+        
+        // Trigger a custom event that the app can listen to
+        window.dispatchEvent(new CustomEvent('incomingCallClicked', {
+          detail: { callerName, callType }
+        }));
       };
 
-      // Handle notification action clicks
-      notification.onactionclick = (event) => {
-        console.log('Notification action clicked:', event.action);
-        // You can trigger accept/decline actions here
+      // Handle notification close
+      notification.onclose = () => {
+        console.log('Incoming call notification closed');
       };
 
       return notification;
