@@ -277,6 +277,7 @@ export const useVideoCall = (user, activeChat) => {
       if (ringtoneRef.current) {
         try {
           const playResult = ringtoneRef.current && ringtoneRef.current.play && ringtoneRef.current.play();
+          // Only call .catch() if playResult is a Promise (real Audio element)
           if (playResult && typeof playResult.catch === 'function') {
             playResult.catch(err => console.log('Ringtone play failed:', err));
           }
@@ -332,6 +333,7 @@ export const useVideoCall = (user, activeChat) => {
       if (callEndRef.current) {
         try {
           const playResult = callEndRef.current && callEndRef.current.play && callEndRef.current.play();
+          // Only call .catch() if playResult is a Promise (real Audio element)
           if (playResult && typeof playResult.catch === 'function') {
             playResult.catch(err => console.log('Call end sound failed:', err));
           }
