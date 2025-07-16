@@ -396,9 +396,21 @@ function App() {
   // Global call handling
   useEffect(() => {
     if (token && user?._id && socket.current) {
-      socket.current.on('call:incoming', ({ from, callType }) => {
+      socket.current.on('call:incoming', async ({ from, callType }) => {
         console.log('[App] Global incoming call from:', from, 'type:', callType);
-        setGlobalIncomingCall({ from, callType });
+        let callerUser = { _id: from, username: 'Unknown' };
+        try {
+          const res = await fetch(`${API_URL}/users/${from}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            callerUser = data;
+          }
+        } catch (err) {
+          console.error('Failed to fetch caller info:', err);
+        }
+        setGlobalIncomingCall({ from, callType, callerUser });
         setShowVideoCall(true);
       });
 
@@ -1165,7 +1177,7 @@ function App() {
           {showVideoCall && globalIncomingCall && (
             <VideoCall
               user={user}
-              activeChat={{ _id: globalIncomingCall.from, username: 'Unknown' }}
+              activeChat={globalIncomingCall.callerUser}
               onClose={() => setShowVideoCall(false)}
             />
           )}
@@ -1668,7 +1680,6 @@ function App() {
                 +
               </button>
             )}
-            
             {/* Floating Action Button for Create Reel */}
             {token && !showCreateReelModal && currentView === 'reels' && (
               <button
