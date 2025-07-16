@@ -3,19 +3,7 @@ import { useVideoCall } from '../hooks/useVideoCall';
 import VideoCallDebug from './VideoCallDebug';
 
 const VideoCall = ({ user, activeChat, onClose }) => {
-  // Defensive: If required props are missing, render fallback
-  if (!user || !activeChat) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md text-center">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Call cannot be started</h2>
-          <p className="text-gray-600 dark:text-gray-300">User or chat information is missing. Please try again.</p>
-          <button onClick={onClose} className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Close</button>
-        </div>
-      </div>
-    );
-  }
-
+  // Always call hooks first!
   const {
     callType,
     callActive,
@@ -108,6 +96,19 @@ const VideoCall = ({ user, activeChat, onClose }) => {
       default: return 'Unknown';
     }
   };
+
+  // Defensive: If required props are missing, render fallback
+  if (!user || !activeChat) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md text-center">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Call cannot be started</h2>
+          <p className="text-gray-600 dark:text-gray-300">User or chat information is missing. Please try again.</p>
+          <button onClick={onClose} className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Close</button>
+        </div>
+      </div>
+    );
+  }
 
   if (!callActive && !incomingCall) {
     return null;
