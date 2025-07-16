@@ -98,12 +98,12 @@ const VideoCall = ({ user, activeChat, onClose }) => {
   };
 
   // Defensive: If required props are missing, render fallback
-  if (!user || !activeChat) {
+  if (!user || !activeChat || !callType) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md text-center">
           <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Call cannot be started</h2>
-          <p className="text-gray-600 dark:text-gray-300">User or chat information is missing. Please try again.</p>
+          <p className="text-gray-600 dark:text-gray-300">Required call information is missing. Please try again.</p>
           <button onClick={onClose} className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Close</button>
         </div>
       </div>
@@ -116,8 +116,8 @@ const VideoCall = ({ user, activeChat, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-      <ErrorBoundary>
-        {/* Debug Panel */}
+      {/* Defensive: Only render VideoCallDebug if all required props are present */}
+      {user && activeChat && callType ? (
         <VideoCallDebug
           callType={callType}
           callActive={callActive}
@@ -131,8 +131,11 @@ const VideoCall = ({ user, activeChat, onClose }) => {
           error={error}
           connectionStats={connectionStats}
         />
-        
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-hidden">
+      ) : (
+        <div className="p-4 text-red-600 bg-red-100 rounded-lg mb-4">Debug info unavailable: missing call data.</div>
+      )}
+      
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -238,7 +241,7 @@ const VideoCall = ({ user, activeChat, onClose }) => {
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-medium text-gray-800 dark:text-white">
-                        Voice Call with {activeChat?.username}
+                        Voice Call with {activeChat?.username || 'Unknown'}
                       </p>
                       {!remoteStream && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -319,22 +322,27 @@ const VideoCall = ({ user, activeChat, onClose }) => {
           ) : (
             /* Incoming Call UI */
             <div className="flex flex-col items-center space-y-6">
-              <div className="text-center">
-                <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                  <span className="text-4xl">
-                    {incomingCall?.callType === 'voice' ? '📞' : '🎥'}
-                  </span>
+              {/* Caller Avatar */}
+              {activeChat?.profileImage ? (
+                <img
+                  src={activeChat.profileImage}
+                  alt="Avatar"
+                  className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-blue-500 shadow-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <span className="text-4xl text-white font-bold">{activeChat?.username?.charAt(0).toUpperCase() || 'U'}</span>
                 </div>
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                  Incoming {incomingCall?.callType === 'voice' ? 'Voice' : 'Video'} Call
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {activeChat?.username} is calling...
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                  {incomingCall?.callType === 'voice' ? 'Voice call' : 'Video call'} • {new Date().toLocaleTimeString()}
-                </p>
-              </div>
+              )}
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                Incoming {incomingCall?.callType === 'voice' ? 'Voice' : 'Video'} Call
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                {activeChat?.username} is calling...
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                {incomingCall?.callType === 'voice' ? 'Voice call' : 'Video call'} • {new Date().toLocaleTimeString()}
+              </p>
 
               {/* Call Action Buttons */}
               <div className="flex items-center space-x-4">
@@ -361,7 +369,7 @@ const VideoCall = ({ user, activeChat, onClose }) => {
             </div>
           )}
         </div>
-      </ErrorBoundary>
+      </div>
     </div>
   );
 };
