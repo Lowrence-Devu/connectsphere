@@ -1491,7 +1491,7 @@ function App() {
             </div>
 
             {/* Main Content */}
-            <div className="w-full px-1 sm:px-4 py-4 sm:py-8 sm:max-w-2xl sm:mx-auto">
+            <div className="w-full px-1 sm:px-4 py-4 sm:py-8 sm:max-w-2xl sm:mx-auto pb-24"> {/* Add pb-24 for nav bar space */}
               {currentView === 'dm' ? (
                 <DM
                   inbox={inbox}
