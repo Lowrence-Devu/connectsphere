@@ -1,4 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
+import toast from 'react-hot-toast';
+import Post from '../Post';
+
+const settingsOptions = [
+  'Apps and websites',
+  'QR code',
+  'Notifications',
+  'Settings and privacy',
+  'Supervision',
+  'Login activity',
+  'Log out',
+  'Cancel',
+];
 
 const Profile = ({
   userProfile,
@@ -23,94 +36,75 @@ const Profile = ({
   setActiveChat,
   onPostClick
 }) => {
+  const [showSettings, setShowSettings] = useState(false);
+  const [posts, setPosts] = useState(userPosts);
+  // Settings state
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(user?.isPrivate || false);
+  const [notificationSettings, setNotificationSettings] = useState({
+    pushEnabled: user?.notificationSettings?.pushEnabled ?? true,
+    likes: user?.notificationSettings?.likes ?? true,
+    comments: user?.notificationSettings?.comments ?? true,
+    follows: user?.notificationSettings?.follows ?? true,
+    messages: user?.notificationSettings?.messages ?? true,
+    videoCalls: user?.notificationSettings?.videoCalls ?? true,
+  });
+
+  // Sync settings when user changes
+  React.useEffect(() => {
+    setIsPrivate(user?.isPrivate || false);
+    setNotificationSettings({
+      pushEnabled: user?.notificationSettings?.pushEnabled ?? true,
+      likes: user?.notificationSettings?.likes ?? true,
+      comments: user?.notificationSettings?.comments ?? true,
+      follows: user?.notificationSettings?.follows ?? true,
+      messages: user?.notificationSettings?.messages ?? true,
+      videoCalls: user?.notificationSettings?.videoCalls ?? true,
+    });
+  }, [user]);
+
   if (!userProfile) return null;
+
+  const handleDeletePost = async (postId) => {
+    // Optimistically remove the post
+    setPosts((prev) => prev.filter((p) => p._id !== postId));
+    try {
+      const res = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete post');
+      toast.success('Post deleted');
+    } catch (err) {
+      toast.error('Failed to delete post');
+      // Optionally, re-add the post if deletion failed
+    }
+  };
   return (
-    <div className="space-y-6 px-2 sm:px-0">
-      {/* Profile Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row items-center sm:space-x-4 space-y-4 sm:space-y-0 mb-4">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 overflow-hidden">
-            {userProfile.profileImage ? (
-              <img
-                src={userProfile.profileImage}
-                alt="Avatar"
-                className="w-20 h-20 rounded-full object-cover border-2 border-blue-500"
-              />
-            ) : (
-              <span className="text-white font-bold text-2xl">
-                {userProfile.username?.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-              {userProfile.username}
-            </h2>
-            <div className="flex items-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
-              <span>{userPosts.length} posts</span>
-              <span>{userProfile.followers?.length || 0} followers</span>
-              <span>{userProfile.following?.length || 0} following</span>
-            </div>
-            <div className="text-gray-600 dark:text-gray-300 mt-2">{userProfile.bio}</div>
-          </div>
+    <div className="max-w-xl mx-auto space-y-8 px-2 sm:px-0">
+      {/* Profile Card */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-md p-6 flex flex-col items-center transition-all duration-500 animate-fade-in">
+        <div className="w-28 h-28 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-800 overflow-hidden border-2 border-gray-300 dark:border-gray-700 mb-4">
+          {userProfile.profileImage ? (
+            <img
+              src={userProfile.profileImage}
+              alt="Avatar"
+              className="w-28 h-28 rounded-full object-cover"
+            />
+          ) : (
+            <span className="text-gray-600 dark:text-gray-200 font-bold text-4xl">
+              {userProfile.username?.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{userProfile.username}</h2>
+        <div className="flex items-center gap-6 text-base text-gray-500 dark:text-gray-400 font-medium mb-2">
+          <span><span className="font-bold text-gray-900 dark:text-white">{userPosts.length}</span> posts</span>
+          <span><span className="font-bold text-gray-900 dark:text-white">{userProfile.followers?.length || 0}</span> followers</span>
+          <span><span className="font-bold text-gray-900 dark:text-white">{userProfile.following?.length || 0}</span> following</span>
+        </div>
+        <div className="text-gray-600 dark:text-gray-300 text-center mb-4 max-w-xs break-words">{userProfile.bio}</div>
+        {/* Action Buttons */}
+        <div className="flex gap-3 w-full justify-center mt-2">
           {userProfile._id === user?._id ? (
-            editingProfile ? (
-              <form className="space-y-4 w-full sm:max-w-md" onSubmit={handleEditProfile}>
-                <div className="flex flex-col items-center mb-4">
-                  <label className="relative cursor-pointer group">
-                    <img
-                      src={editImageFile ? URL.createObjectURL(editImageFile) : (editProfileImage || '/default-avatar.png')}
-                      alt="Avatar"
-                      className="w-20 h-20 rounded-full object-cover border-2 border-blue-500"
-                    />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={e => setEditImageFile(e.target.files[0])}
-                    />
-                    <span className="absolute bottom-0 right-0 bg-blue-600 text-white text-xs rounded-full px-2 py-1 opacity-80 group-hover:opacity-100">Change</span>
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
-                  <input
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    value={editUsername}
-                    onChange={e => setEditUsername(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bio</label>
-                  <textarea
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    value={editBio}
-                    onChange={e => setEditBio(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <div className="flex space-x-2 mt-4">
-                  <button
-                    type="submit"
-                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200"
-                    disabled={editLoading}
-                  >
-                    {editLoading ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
-                    className="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-700 transition-all duration-200"
-                    onClick={() => setEditingProfile(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {editError && (
-                  <div className="text-red-600 dark:text-red-400 text-sm mb-2">{editError}</div>
-                )}
-              </form>
-            ) : (
+            <>
               <button
                 onClick={() => {
                   setEditingProfile(true);
@@ -119,11 +113,21 @@ const Profile = ({
                   setEditProfileImage(userProfile.profileImage || '');
                   setEditImageFile(null);
                 }}
-                className="px-6 py-2 rounded-full font-medium transition-all duration-200 bg-blue-600 text-white hover:bg-blue-700"
+                className="px-5 py-2 rounded-lg font-medium bg-gray-800 text-white hover:bg-gray-700 transition-all duration-200 transition-transform hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
                 Edit Profile
               </button>
-            )
+              <button
+                onClick={() => setShowSettings(true)}
+                className="p-2 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-all duration-200 transition-transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                title="Settings"
+              >
+                <svg className="w-6 h-6 animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.774-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.149-.894z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </>
           ) : (
             <>
               <button
@@ -135,11 +139,7 @@ const Profile = ({
                     followUser(userProfile._id);
                   }
                 }}
-                className={`px-6 py-2 rounded-full font-medium transition-all duration-200 ${
-                  userProfile.followers?.includes(user?._id)
-                    ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
+                className={`px-5 py-2 rounded-lg font-medium transition-all duration-200 transition-transform hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${userProfile.followers?.includes(user?._id) ? 'bg-gray-800 text-white hover:bg-red-700' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
               >
                 {userProfile.followers?.includes(user?._id) ? 'Unfollow' : 'Follow'}
               </button>
@@ -148,7 +148,7 @@ const Profile = ({
                   setCurrentView('dm');
                   setActiveChat({ _id: userProfile._id, username: userProfile.username });
                 }}
-                className="ml-2 px-6 py-2 rounded-full font-medium transition-all duration-200 bg-green-600 text-white hover:bg-green-700"
+                className="px-5 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-all duration-200 transition-transform hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
               >
                 Message
               </button>
@@ -157,7 +157,7 @@ const Profile = ({
                   // Video call functionality will be added here
                   console.log('Video call to:', userProfile.username);
                 }}
-                className="ml-2 px-6 py-2 rounded-full font-medium transition-all duration-200 bg-purple-600 text-white hover:bg-purple-700"
+                className="px-5 py-2 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition-all duration-200 transition-transform hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
               >
                 📞 Call
               </button>
@@ -165,9 +165,102 @@ const Profile = ({
           )}
         </div>
       </div>
-
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm transition-opacity duration-300">
+          <div className="bg-gray-900 rounded-2xl shadow-2xl w-96 max-w-full p-6 flex flex-col gap-4 transform transition-all duration-300 scale-95 opacity-0 animate-modal-in">
+            <h2 className="text-xl font-bold text-white mb-2">Settings</h2>
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                setSettingsLoading(true);
+                try {
+                  const res = await fetch('/api/users/me', {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    },
+                    body: JSON.stringify({
+                      isPrivate,
+                      notificationSettings,
+                    }),
+                  });
+                  if (!res.ok) throw new Error('Failed to update settings');
+                  toast.success('Settings updated');
+                  setShowSettings(false);
+                } catch (err) {
+                  toast.error(err.message || 'Failed to update settings');
+                } finally {
+                  setSettingsLoading(false);
+                }
+              }}
+              className="flex flex-col gap-4"
+            >
+              <div>
+                <label className="flex items-center gap-3 text-white font-medium mb-1">
+                  <input
+                    type="checkbox"
+                    checked={isPrivate}
+                    onChange={e => setIsPrivate(e.target.checked)}
+                    className="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-400"
+                  />
+                  Private Account
+                </label>
+                <p className="text-gray-400 text-xs ml-8">Only approved followers can see your posts.</p>
+              </div>
+              <div className="border-t border-gray-700 pt-2">
+                <div className="font-semibold text-white mb-2">Notifications</div>
+                {[
+                  { key: 'pushEnabled', label: 'Enable Push Notifications' },
+                  { key: 'likes', label: 'Likes' },
+                  { key: 'comments', label: 'Comments' },
+                  { key: 'follows', label: 'Follows' },
+                  { key: 'messages', label: 'Messages' },
+                  { key: 'videoCalls', label: 'Video Calls' },
+                ].map(opt => (
+                  <label key={opt.key} className="flex items-center gap-3 text-white mb-1">
+                    <input
+                      type="checkbox"
+                      checked={!!notificationSettings[opt.key]}
+                      onChange={e => setNotificationSettings(ns => ({ ...ns, [opt.key]: e.target.checked }))}
+                      className="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-400"
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={settingsLoading}
+                >
+                  {settingsLoading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 bg-gray-700 text-white py-2 rounded-lg font-semibold hover:bg-gray-800 transition-all duration-200"
+                  onClick={() => setShowSettings(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+            <button
+              className="w-full mt-2 bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-all duration-200"
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+            >
+              Log Out
+            </button>
+          </div>
+        </div>
+      )}
       {/* User Posts Grid */}
-      <div>
+      <div className="transition-all duration-500 animate-fade-in">
         {userPosts.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 dark:text-gray-500 text-6xl mb-4">📝</div>
@@ -175,24 +268,15 @@ const Profile = ({
             <p className="text-gray-500 dark:text-gray-400">This user hasn't shared anything yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-4 mt-6">
-            {userPosts.map(post => (
-              <div
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+            {posts.map(post => (
+              <Post
                 key={post._id}
-                className="relative group aspect-w-1 aspect-h-1 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer"
-                onClick={() => onPostClick && onPostClick(post)}
-              >
-                {post.image ? (
-                  <img src={post.image} alt="Post" className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105" />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
-                    <span className="text-4xl">📝</span>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 flex items-center justify-center transition-all duration-200">
-                  <span className="text-white opacity-0 group-hover:opacity-100 font-semibold text-lg">{post.likes?.length || 0} ♥</span>
-                </div>
-              </div>
+                post={post}
+                user={user}
+                onPostClick={onPostClick}
+                onDeletePost={handleDeletePost}
+              />
             ))}
           </div>
         )}
