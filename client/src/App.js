@@ -1267,7 +1267,7 @@ function App() {
       </nav>
       {/* Main Content */}
       <div className="ml-0 md:ml-20 flex flex-col min-h-screen w-full pb-16 md:pb-0">
-        <div className="w-full md:max-w-2xl md:mx-auto px-0 md:px-4 flex-1 flex flex-col">
+        <div className="w-full px-2 sm:px-4 md:max-w-2xl md:mx-auto md:px-4 flex-1 flex flex-col">
           {/* Global VideoCall UI: shows for incoming calls anywhere in the app */}
           {showVideoCall && globalIncomingCall && (
             <VideoCall
