@@ -1163,22 +1163,119 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
-      {!appInitialized ? (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-300">Loading ConnectSphere...</p>
-          </div>
+    <>
+      {/* Sidebar: Desktop only */}
+      <nav className="hidden md:flex fixed top-0 left-0 h-screen w-20 z-50 bg-white dark:bg-gray-900 flex-col items-center py-6 shadow-lg border-r border-gray-200 dark:border-gray-700">
+        <div className="mb-8">
+          <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">CS</span>
         </div>
-      ) : (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+        <button
+          className={`flex flex-col items-center mb-8 focus:outline-none ${currentView === 'feed' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('feed')}
+          title="Feed"
+        >
+          <span className="text-2xl mb-1">🏠</span>
+          <span className="text-xs">Feed</span>
+        </button>
+        <button
+          className={`flex flex-col items-center mb-8 focus:outline-none ${currentView === 'explore' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('explore')}
+          title="Explore"
+        >
+          <span className="text-2xl mb-1">🔍</span>
+          <span className="text-xs">Explore</span>
+        </button>
+        <button
+          className={`flex flex-col items-center mb-8 focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('reels')}
+          title="Reels"
+        >
+          <span className="text-2xl mb-1">🎬</span>
+          <span className="text-xs">Reels</span>
+        </button>
+        <button
+          className={`flex flex-col items-center mb-8 focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('dm')}
+          title="Messages"
+        >
+          <span className="text-2xl mb-1">💬</span>
+          <span className="text-xs">Messages</span>
+        </button>
+        <button
+          className={`flex flex-col items-center mt-auto focus:outline-none ${currentView === 'profile' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => {
+            setCurrentView('profile');
+            if (user && user._id) {
+              setUserProfile(user);
+              fetchUserProfile(user._id);
+            }
+          }}
+          title="Profile"
+        >
+          <span className="text-2xl mb-1">👤</span>
+          <span className="text-xs">Profile</span>
+        </button>
+      </nav>
+      {/* Bottom Nav Bar: Mobile only */}
+      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 w-full z-50 bg-white dark:bg-gray-900 flex justify-around items-center h-16 shadow">
+        <button
+          className={`flex flex-col items-center focus:outline-none ${currentView === 'feed' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('feed')}
+          title="Feed"
+        >
+          <span className="text-2xl">🏠</span>
+          <span className="text-xs">Feed</span>
+        </button>
+        <button
+          className={`flex flex-col items-center focus:outline-none ${currentView === 'explore' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('explore')}
+          title="Explore"
+        >
+          <span className="text-2xl">🔍</span>
+          <span className="text-xs">Explore</span>
+        </button>
+        <button
+          className={`flex flex-col items-center focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('reels')}
+          title="Reels"
+        >
+          <span className="text-2xl">🎬</span>
+          <span className="text-xs">Reels</span>
+        </button>
+        <button
+          className={`flex flex-col items-center focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => setCurrentView('dm')}
+          title="Messages"
+        >
+          <span className="text-2xl">💬</span>
+          <span className="text-xs">Messages</span>
+        </button>
+        <button
+          className={`flex flex-col items-center focus:outline-none ${currentView === 'profile' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+          onClick={() => {
+            setCurrentView('profile');
+            if (user && user._id) {
+              setUserProfile(user);
+              fetchUserProfile(user._id);
+            }
+          }}
+          title="Profile"
+        >
+          <span className="text-2xl">👤</span>
+          <span className="text-xs">Profile</span>
+        </button>
+      </nav>
+      {/* Main Content */}
+      <div className="ml-0 md:ml-20 flex flex-col min-h-screen w-full pb-16 md:pb-0">
+        <div className="max-w-2xl w-full mx-auto px-4 flex-1 flex flex-col">
           {/* Global VideoCall UI: shows for incoming calls anywhere in the app */}
           {showVideoCall && globalIncomingCall && (
             <VideoCall
+              show={showVideoCall}
+              onClose={() => setShowVideoCall(false)}
+              call={globalIncomingCall}
               user={user}
               activeChat={globalIncomingCall.callerUser}
-              onClose={() => setShowVideoCall(false)}
             />
           )}
           {/* Header Navigation */}
@@ -1191,7 +1288,6 @@ function App() {
                     ConnectSphere
                   </h1>
                 </div>
-
                 {/* Navigation */}
                 <div className="flex items-center space-x-4">
                   {/* Search */}
@@ -1489,187 +1585,6 @@ function App() {
                 </div>
               </div>
             </div>
-
-            {/* Main Content */}
-            <div className="w-full px-1 sm:px-4 py-4 sm:py-8 sm:max-w-2xl sm:mx-auto pb-24"> {/* Add pb-24 for nav bar space */}
-              {currentView === 'dm' ? (
-                <DM
-                  inbox={inbox}
-                  activeChat={activeChat}
-                  messages={messages}
-                  onSelectChat={userObj => setActiveChat(userObj)}
-                  onSendMessage={handleSendMessage}
-                  messageText={messageText}
-                  setMessageText={setMessageText}
-                  user={user}
-                  chatLoading={chatLoading}
-                  onNavigateToProfile={navigateToProfile}
-                />
-              ) : currentView === 'explore' ? (
-                <Explore
-                  posts={explorePosts}
-                  onPostClick={openPostModal}
-                  onSearch={fetchExplorePosts}
-                />
-              ) : currentView === 'profile' ? (
-                profileLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                    <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
-                  </div>
-                ) : userProfile ? (
-                  <>
-                    <Profile
-                      userProfile={userProfile}
-                      userPosts={userPosts}
-                      user={user}
-                      editingProfile={editingProfile}
-                      editUsername={editUsername}
-                      editBio={editBio}
-                      editProfileImage={editProfileImage}
-                      editImageFile={editImageFile}
-                      editLoading={editLoading}
-                      editError={editError}
-                      setEditingProfile={setEditingProfile}
-                      setEditUsername={setEditUsername}
-                      setEditBio={setEditBio}
-                      setEditProfileImage={setEditProfileImage}
-                      setEditImageFile={setEditImageFile}
-                      handleEditProfile={async (e) => {
-                        e.preventDefault();
-                        setEditLoading(true);
-                        setEditError('');
-                        let imageUrl = editProfileImage;
-                        try {
-                          if (editImageFile) {
-                            const formData = new FormData();
-                            formData.append('image', editImageFile);
-                            const res = await fetch(`${API_URL}/upload`, {
-                              method: 'POST',
-                              headers: { Authorization: `Bearer ${token}` },
-                              body: formData,
-                            });
-                            const data = await res.json();
-                            if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
-                            imageUrl = data.url;
-                          }
-                          const res = await fetch(`${API_URL}/users/me`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
-                          });
-                          const updated = await res.json();
-                          if (!res.ok) throw new Error(updated.message || 'Profile update failed');
-                          setUserProfile(updated);
-                          setUser(updated);
-                          localStorage.setItem('user', JSON.stringify(updated));
-                          setEditingProfile(false);
-                        } catch (err) {
-                          setEditError(err.message || 'Failed to update profile');
-                          console.error('Profile update error:', err);
-                        }
-                        setEditLoading(false);
-                      }}
-                      followUser={followUser}
-                      unfollowUser={unfollowUser}
-                      setCurrentView={setCurrentView}
-                      setActiveChat={setActiveChat}
-                      onPostClick={openPostModal}
-                    />
-                  </>
-                ) : null
-              ) : currentView === 'feed' ? (
-                <Feed
-                  posts={posts}
-                  user={user}
-                  comments={comments}
-                  showComments={showComments}
-                  commentText={commentText}
-                  onLike={handleLike}
-                  onAddComment={(postId, value) => {
-                    if (value !== undefined) {
-                      setCommentText(prev => ({ ...prev, [postId]: value }));
-                    } else {
-                      handleAddComment(postId);
-                    }
-                  }}
-                  onDeleteComment={handleDeleteComment}
-                  onToggleComments={toggleComments}
-                  onNavigateToProfile={navigateToProfile}
-                  onPostClick={openPostModal}
-                  stories={stories}
-                  onStoryView={handleStoryView}
-                  onCreateStory={() => setShowCreateStoryModal(true)}
-                  onDeleteStory={handleDeleteStory}
-                />
-              ) : currentView === 'reels' ? (
-                <Reels
-                  reels={reels}
-                  user={user}
-                  onReelView={handleReelView}
-                  onCreateReel={() => setShowCreateReelModal(true)}
-                  onDeleteReel={handleDeleteReel}
-                  onNavigateToProfile={navigateToProfile}
-                />
-              ) : null}
-              {showPostModal && selectedPost && (
-                <PostModal
-                  post={selectedPost}
-                  user={user}
-                  comments={comments[selectedPost._id] || []}
-                  onClose={closePostModal}
-                  onLike={() => handleLike(selectedPost._id)}
-                  onAddComment={() => handleAddComment(selectedPost._id)}
-                  onDeleteComment={handleDeleteComment}
-                  commentText={commentText[selectedPost._id] || ''}
-                  setCommentText={val => setCommentText(prev => ({ ...prev, [selectedPost._id]: val }))}
-                />
-              )}
-            </div>
-            {/* Bottom Navigation Bar */}
-            <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-gray-900/90 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-2 shadow-lg backdrop-blur-md">
-              <button
-                className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'feed' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-                onClick={() => setCurrentView('feed')}
-              >
-                <span className="text-xl">🏠</span>
-                <span className="text-xs">Feed</span>
-              </button>
-              <button
-                className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'explore' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-                onClick={() => setCurrentView('explore')}
-              >
-                <span className="text-xl">🔍</span>
-                <span className="text-xs">Explore</span>
-              </button>
-              <button
-                className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-                onClick={() => setCurrentView('reels')}
-              >
-                <span className="text-xl">🎬</span>
-                <span className="text-xs">Reels</span>
-              </button>
-              <button
-                className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-                onClick={() => setCurrentView('dm')}
-              >
-                <span className="text-xl">💬</span>
-                <span className="text-xs">Messages</span>
-              </button>
-              <button
-                className={`flex flex-col items-center px-4 py-1 focus:outline-none ${currentView === 'profile' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-                onClick={() => {
-                  setCurrentView('profile');
-                  if (user && user._id) {
-                    setUserProfile(user);
-                    fetchUserProfile(user._id);
-                  }
-                }}
-              >
-                <span className="text-xl">👤</span>
-                <span className="text-xs">Profile</span>
-              </button>
-            </nav>
             {/* Floating Action Button for Create Post */}
             {token && !showCreatePostModal && currentView !== 'reels' && (
               <button
@@ -1863,9 +1778,143 @@ function App() {
               </div>
             )}
           </div>
+          {/* Main Content */}
+          {currentView === 'dm' ? (
+            <DM
+              inbox={inbox}
+              activeChat={activeChat}
+              messages={messages}
+              onSelectChat={userObj => setActiveChat(userObj)}
+              onSendMessage={handleSendMessage}
+              messageText={messageText}
+              setMessageText={setMessageText}
+              user={user}
+              chatLoading={chatLoading}
+              onNavigateToProfile={navigateToProfile}
+            />
+          ) : currentView === 'explore' ? (
+            <Explore
+              posts={explorePosts}
+              onPostClick={openPostModal}
+              onSearch={fetchExplorePosts}
+            />
+          ) : currentView === 'profile' ? (
+            profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+              </div>
+            ) : userProfile ? (
+              <>
+                <Profile
+                  userProfile={userProfile}
+                  userPosts={userPosts}
+                  user={user}
+                  editingProfile={editingProfile}
+                  editUsername={editUsername}
+                  editBio={editBio}
+                  editProfileImage={editProfileImage}
+                  editImageFile={editImageFile}
+                  editLoading={editLoading}
+                  editError={editError}
+                  setEditingProfile={setEditingProfile}
+                  setEditUsername={setEditUsername}
+                  setEditBio={setEditBio}
+                  setEditProfileImage={setEditProfileImage}
+                  setEditImageFile={setEditImageFile}
+                  handleEditProfile={async (e) => {
+                    e.preventDefault();
+                    setEditLoading(true);
+                    setEditError('');
+                    let imageUrl = editProfileImage;
+                    try {
+                      if (editImageFile) {
+                        const formData = new FormData();
+                        formData.append('image', editImageFile);
+                        const res = await fetch(`${API_URL}/upload`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                          body: formData,
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
+                        imageUrl = data.url;
+                      }
+                      const res = await fetch(`${API_URL}/users/me`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
+                      });
+                      const updated = await res.json();
+                      if (!res.ok) throw new Error(updated.message || 'Profile update failed');
+                      setUserProfile(updated);
+                      setUser(updated);
+                      localStorage.setItem('user', JSON.stringify(updated));
+                      setEditingProfile(false);
+                    } catch (err) {
+                      setEditError(err.message || 'Failed to update profile');
+                      console.error('Profile update error:', err);
+                    }
+                    setEditLoading(false);
+                  }}
+                  followUser={followUser}
+                  unfollowUser={unfollowUser}
+                  setCurrentView={setCurrentView}
+                  setActiveChat={setActiveChat}
+                  onPostClick={openPostModal}
+                />
+              </>
+            ) : null
+          ) : currentView === 'feed' ? (
+            <Feed
+              posts={posts}
+              user={user}
+              comments={comments}
+              showComments={showComments}
+              commentText={commentText}
+              onLike={handleLike}
+              onAddComment={(postId, value) => {
+                if (value !== undefined) {
+                  setCommentText(prev => ({ ...prev, [postId]: value }));
+                } else {
+                  handleAddComment(postId);
+                }
+              }}
+              onDeleteComment={handleDeleteComment}
+              onToggleComments={toggleComments}
+              onNavigateToProfile={navigateToProfile}
+              onPostClick={openPostModal}
+              stories={stories}
+              onStoryView={handleStoryView}
+              onCreateStory={() => setShowCreateStoryModal(true)}
+              onDeleteStory={handleDeleteStory}
+            />
+          ) : currentView === 'reels' ? (
+            <Reels
+              reels={reels}
+              user={user}
+              onReelView={handleReelView}
+              onCreateReel={() => setShowCreateReelModal(true)}
+              onDeleteReel={handleDeleteReel}
+              onNavigateToProfile={navigateToProfile}
+            />
+          ) : null}
+          {showPostModal && selectedPost && (
+            <PostModal
+              post={selectedPost}
+              user={user}
+              comments={comments[selectedPost._id] || []}
+              onClose={closePostModal}
+              onLike={() => handleLike(selectedPost._id)}
+              onAddComment={() => handleAddComment(selectedPost._id)}
+              onDeleteComment={handleDeleteComment}
+              commentText={commentText[selectedPost._id] || ''}
+              setCommentText={val => setCommentText(prev => ({ ...prev, [selectedPost._id]: val }))}
+            />
+          )}
         </div>
-      )}
-    </ErrorBoundary>
+      </div>
+    </>
   );
 }
 
