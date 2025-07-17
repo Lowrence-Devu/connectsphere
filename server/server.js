@@ -108,7 +108,7 @@ mongoose.connect(process.env.MONGO_URI)
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
-  
+
   let userId = null;
 
   // Listen for join event to join user-specific room
@@ -144,7 +144,7 @@ io.on('connection', (socket) => {
         return;
       }
       console.log(`Call request from ${from} to ${to} (${callType})`);
-      io.to(String(to)).emit('call:incoming', { from, callType });
+    io.to(String(to)).emit('call:incoming', { from, callType });
     } catch (err) {
       console.error('Call request error:', err);
     }
@@ -157,7 +157,7 @@ io.on('connection', (socket) => {
         return;
       }
       console.log(`Call accepted by ${from} to ${to}`);
-      io.to(String(to)).emit('call:accepted', { from });
+    io.to(String(to)).emit('call:accepted', { from });
     } catch (err) {
       console.error('Call accept error:', err);
     }
@@ -170,7 +170,7 @@ io.on('connection', (socket) => {
         return;
       }
       console.log(`Signal from ${from} to ${to}`);
-      io.to(String(to)).emit('call:signal', { from, signal });
+    io.to(String(to)).emit('call:signal', { from, signal });
     } catch (err) {
       console.error('Call signal error:', err);
     }
@@ -183,7 +183,7 @@ io.on('connection', (socket) => {
         return;
       }
       console.log(`Call ended by ${from} to ${to}`);
-      io.to(String(to)).emit('call:ended', { from });
+    io.to(String(to)).emit('call:ended', { from });
     } catch (err) {
       console.error('Call end error:', err);
     }
@@ -210,8 +210,8 @@ io.on('connection', (socket) => {
         console.error('Invalid call ID for join-call');
         return;
       }
-      socket.join(callId);
-      console.log(`Socket ${socket.id} joined call room ${callId}`);
+    socket.join(callId);
+    console.log(`Socket ${socket.id} joined call room ${callId}`);
     } catch (err) {
       console.error('Join call error:', err);
     }
@@ -223,8 +223,8 @@ io.on('connection', (socket) => {
         console.error('Invalid call ID for leave-call');
         return;
       }
-      socket.leave(callId);
-      console.log(`Socket ${socket.id} left call room ${callId}`);
+    socket.leave(callId);
+    console.log(`Socket ${socket.id} left call room ${callId}`);
     } catch (err) {
       console.error('Leave call error:', err);
     }
@@ -237,11 +237,11 @@ io.on('connection', (socket) => {
         console.error('Invalid offer data:', data);
         return;
       }
-      // Emit to the target user's room
-      io.to(String(data.targetUserId)).emit('offer', {
-        offer: data.offer,
-        callerId: data.callerId
-      });
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('offer', {
+      offer: data.offer,
+      callerId: data.callerId
+    });
     } catch (err) {
       console.error('Offer error:', err);
     }
@@ -253,11 +253,11 @@ io.on('connection', (socket) => {
         console.error('Invalid answer data:', data);
         return;
       }
-      // Emit to the target user's room
-      io.to(String(data.targetUserId)).emit('answer', {
-        answer: data.answer,
-        answererId: data.answererId
-      });
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('answer', {
+      answer: data.answer,
+      answererId: data.answererId
+    });
     } catch (err) {
       console.error('Answer error:', err);
     }
@@ -269,11 +269,11 @@ io.on('connection', (socket) => {
         console.error('Invalid call-ended data:', data);
         return;
       }
-      // Emit to the target user's room
-      io.to(String(data.targetUserId)).emit('call-ended', {
-        callId: data.callId,
-        endedBy: data.endedBy
-      });
+    // Emit to the target user's room
+    io.to(String(data.targetUserId)).emit('call-ended', {
+      callId: data.callId,
+      endedBy: data.endedBy
+    });
     } catch (err) {
       console.error('Call ended error:', err);
     }

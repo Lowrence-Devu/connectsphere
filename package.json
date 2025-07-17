@@ -6,6 +6,14 @@
   },
   "dependencies": {
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "q": "1.5.1",
+    "rimraf": "6.0.1",
+    "rollup-plugin-terser": "7.0.2",
+    "sourcemap-codec": "1.4.8",
+    "stable": "0.1.8",
+    "w3c-hr-time": "1.0.2",
+    "workbox-cacheable-response": "7.3.0",
+    "workbox-google-analytics": "7.3.0"
   }
 }

@@ -46,10 +46,15 @@ const Header = ({
             </button>
           )}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-lg">C</span>
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">ConnectSphere</h1>
+            <button onClick={() => setCurrentView('feed')} className="focus:outline-none">
+              <img
+                src={process.env.PUBLIC_URL + '/connectsphere-logo.png'}
+                alt="Connectsphere Logo"
+                className="w-10 h-10 rounded-xl shadow-lg transition-transform duration-200 hover:scale-105"
+                style={{ background: 'linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 100%)' }}
+              />
+            </button>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Connectsphere</h1>
           </div>
         </div>
 

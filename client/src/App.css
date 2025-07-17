@@ -638,7 +638,7 @@ body.dark {
   display: flex;
   justify-content: space-around;
   padding: 1rem 0;
-  position: sticky;
+  position: relative;
   bottom: 0;
   z-index: 100;
 }

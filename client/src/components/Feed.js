@@ -29,7 +29,7 @@ const Feed = ({
     );
   }
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-xl w-full mx-auto px-0 sm:px-4">
       {/* Stories Section */}
       <Stories
         stories={stories || []}

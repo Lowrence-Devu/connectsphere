@@ -13,8 +13,8 @@ const PostModal = ({
 }) => {
   if (!post) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm transition-opacity duration-300">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 relative transform transition-all duration-300 scale-95 opacity-0 animate-modal-in">
         <button
           onClick={onClose}
           className="absolute top-3 right-3 text-gray-500 dark:text-gray-300 hover:text-red-500 text-2xl font-bold"
@@ -41,8 +41,10 @@ const PostModal = ({
             </div>
             <div className="mb-2 text-gray-700 dark:text-gray-300">{post.text}</div>
             <div className="flex items-center space-x-4 mb-4">
-              <button onClick={onLike} className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-semibold">
-                <span>👍</span>
+              <button onClick={onLike} className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-semibold transition-transform duration-150 hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                <svg className="w-6 h-6 transition-colors duration-200 hover:text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 21C12 21 4 13.5 4 8.5C4 5.42 6.42 3 9.5 3C11.24 3 12.91 4.1 13.44 5.68C13.97 4.1 15.64 3 17.38 3C20.46 3 22.88 5.42 22.88 8.5C22.88 13.5 15 21 15 21H12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
                 <span>{post.likes?.length || 0}</span>
               </button>
               <span className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
@@ -71,7 +73,7 @@ const PostModal = ({
                       <p className="text-gray-700 dark:text-gray-300 text-sm">{comment.text}</p>
                     </div>
                     {user && comment.author?._id === user._id && (
-                      <button onClick={() => onDeleteComment(comment._id)} className="text-red-500 hover:text-red-700 text-xs ml-2">Delete</button>
+                      <button onClick={() => onDeleteComment(comment._id)} className="text-red-500 hover:text-red-700 text-xs ml-2 transition-transform duration-150 hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">Delete</button>
                     )}
                   </div>
                 ))

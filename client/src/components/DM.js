@@ -93,33 +93,33 @@ const DM = ({
               const lastMessage = convo.lastMessage;
               const unread = convo.unread;
               return (
-                <div
+              <div
                   key={chatUser?._id || Math.random()}
                   className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${activeChat?._id === chatUser?._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                  onClick={() => {
-                    onSelectChat(chatUser);
+                onClick={() => {
+                  onSelectChat(chatUser);
                     setMobileView('chat');
-                  }}
+                }}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectChat(chatUser); setMobileView('chat'); } }}
                   tabIndex={0}
                   role="button"
                   aria-label={`Open chat with ${chatUser?.username || 'Unknown User'}`}
-                >
-                  <div
+              >
+                <div
                     className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden mr-3 shadow-md border-2 border-white dark:border-gray-900"
-                    onClick={e => { e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); }}
+                  onClick={e => { e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); }}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNavigateToProfile && onNavigateToProfile(chatUser); } }}
-                    title="View profile"
-                    style={{ cursor: 'pointer' }}
+                  title="View profile"
+                  style={{ cursor: 'pointer' }}
                     tabIndex={0}
                     role="button"
                     aria-label={`View ${chatUser?.username || 'Unknown User'}'s profile`}
-                  >
+                >
                     {chatUser?.profileImage ? (
-                      <img src={chatUser.profileImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-                    ) : (
+                    <img src={chatUser.profileImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
                       <span className="text-white font-bold text-lg">{chatUser?.username?.charAt(0).toUpperCase() || '?'}</span>
-                    )}
+                  )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">

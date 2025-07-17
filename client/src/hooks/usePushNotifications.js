@@ -18,7 +18,7 @@ export const usePushNotifications = () => {
     if (Notification.permission === 'default') {
       Notification.requestPermission().then((permission) => {
         setPermission(permission);
-      });
+        });
     }
   }, []);
 
@@ -74,7 +74,7 @@ export const usePushNotifications = () => {
         badge: '/logo192.png',
         ...options
       });
-    }
+        }
   };
 
   // Function to request notification permission

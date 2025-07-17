@@ -20,7 +20,7 @@ const Explore = ({ posts, onPostClick, onSearch }) => {
         />
         <button type="submit" className="ml-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">Search</button>
       </form>
-      <div className="grid grid-cols-3 gap-2 md:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
         {posts.length === 0 ? (
           <div className="col-span-3 text-center py-12">
             <div className="text-gray-400 dark:text-gray-500 text-6xl mb-4">🔍</div>
@@ -31,7 +31,7 @@ const Explore = ({ posts, onPostClick, onSearch }) => {
           posts.map(post => (
             <div
               key={post._id}
-              className="relative group aspect-w-1 aspect-h-1 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer"
+              className="relative group aspect-square bg-gray-900 dark:bg-gray-800 rounded-xl overflow-hidden cursor-pointer shadow hover:shadow-lg transition-all duration-200"
               onClick={() => onPostClick && onPostClick(post)}
             >
               {post.image ? (
