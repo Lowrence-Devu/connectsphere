@@ -8,6 +8,7 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "q": "1.5.1",
+    "react-swipeable": "^7.0.2",
     "rimraf": "6.0.1",
     "rollup-plugin-terser": "7.0.2",
     "sourcemap-codec": "1.4.8",

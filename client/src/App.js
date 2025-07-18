@@ -12,6 +12,9 @@ import SplashScreen from './components/SplashScreen';
 import './components/SplashScreen.css';
 import Peer from 'simple-peer';
 import CallModal from './components/CallModal';
+import CreateRealtimePage from './components/CreateRealtimePage';
+import { useSwipeable } from 'react-swipeable';
+import { messaging, getToken, onMessage } from './firebase';
 
 // Add debugging for environment variables
 console.log('[App] Environment check:', {
@@ -176,6 +179,15 @@ function App() {
   const [remoteStream, setRemoteStream] = useState(null);
   const [peer, setPeer] = useState(null);
   const [muted, setMuted] = useState(false);
+
+  // Add showCreateMenu state to App component
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+
+  // Add state for options menu
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+
+  // Add state for real-time create page
+  const [showRealtimeCreate, setShowRealtimeCreate] = useState(false);
 
   useEffect(() => {
     if (showSplash) return;
@@ -1114,6 +1126,71 @@ function App() {
     setPeer(newPeer);
   };
 
+  // Add click outside handler to close menu
+  useEffect(() => {
+    if (!showCreateMenu) return;
+    const handleClick = (e) => {
+      if (!e.target.closest('.relative')) setShowCreateMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showCreateMenu]);
+
+  // Add click outside handler for options menu
+  useEffect(() => {
+    if (!showOptionsMenu) return;
+    const handleClick = (e) => {
+      if (!e.target.closest('.header-options-menu')) setShowOptionsMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showOptionsMenu]);
+
+  // Handler for swipe right on feed (mobile)
+  const handleFeedSwipeRight = () => {
+    setShowRealtimeCreate(true);
+  };
+  // Handler for swipe left on create page
+  const handleCreateSwipeLeft = () => {
+    setShowRealtimeCreate(false);
+  };
+
+  // Always call useSwipeable at the top level (never inside a conditional)
+  const feedSwipeHandlers = useSwipeable({
+    onSwipedRight: handleFeedSwipeRight,
+    preventDefaultTouchmoveEvent: true,
+    trackMouse: true,
+  });
+
+  useEffect(() => {
+    // Request notification permission and get FCM token
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        getToken(messaging, { vapidKey: 'BBgcB4o5eNEqKULI5DZM3cA7S-cRle7G5LsSfx6sQNuzNUH1dn1M9V5eHoCW5tJRY-lNbdxDJRWHECN4JX4AOsc' })
+          .then((currentToken) => {
+            if (currentToken) {
+              console.log('FCM Token:', currentToken);
+              // TODO: Send this token to your backend to save for this user
+            } else {
+              console.log('No registration token available.');
+            }
+          })
+          .catch((err) => {
+            console.log('An error occurred while retrieving token. ', err);
+          });
+      }
+    });
+    // Listen for foreground FCM messages
+    const unsubscribe = onMessage(messaging, (payload) => {
+      console.log('FCM Foreground Message:', payload);
+      // TODO: Replace alert with a custom toast/notification UI
+      alert(`Notification: ${payload.notification?.title || 'New Message'}\n${payload.notification?.body || ''}`);
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
@@ -1264,24 +1341,25 @@ function App() {
               activeChat={globalIncomingCall.callerUser}
             />
           )}
-          {/* Header Navigation */}
-          <div className="bg-white shadow sticky top-0 z-40 rounded-2xl mb-6">
-            <div className="max-w-2xl mx-auto px-4 flex items-center justify-between h-16">
+          {/* ======= RESPONSIVE HEADER START ======= */}
+          <div className="bg-white/90 dark:bg-gray-900/90 border border-gray-200 dark:border-gray-700 shadow sticky top-0 z-50 rounded-b-2xl px-1 xs:px-2 sm:px-4 md:px-8 transition-all duration-500 ease-in-out w-full max-w-full animate-header-in backdrop-blur-md hover:shadow-lg focus-within:shadow-xl">
+            <div className="max-w-2xl mx-auto flex flex-nowrap items-center justify-between h-11 xs:h-12 sm:h-14 md:h-16 gap-1 xs:gap-2 sm:gap-4 md:gap-6 min-w-0">
               {/* Logo */}
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-1 xs:gap-2 sm:gap-4 min-w-0">
                 <img
                   src="/connectsphere-logo.png"
                   alt="ConnectSphere Logo"
-                  className="w-8 h-8 md:w-10 md:h-10 rounded-full shadow-sm mr-2 inline-block align-middle"
+                  className="w-7 h-7 sm:w-9 sm:h-9 rounded-full shadow-sm mr-1 sm:mr-2 inline-block align-middle transition-transform duration-300 hover:scale-110 hover:rotate-3"
+                  style={{ willChange: 'transform' }}
                 />
-                <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
+                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle select-none transition-all duration-300 hidden min-[400px]:inline">Connectsphere</span>
               </div>
               {/* Header Right: DM icon (mobile Feed), Search bar (Explore) */}
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-1 xs:gap-2 sm:gap-4 md:gap-6 flex-nowrap min-w-0">
                 {/* DM Icon on Feed page (mobile only) */}
                 {currentView === 'feed' && (
                   <button
-                    className="md:hidden text-gray-500 dark:text-gray-400 text-2xl focus:outline-none"
+                    className="md:hidden w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 text-2xl focus:outline-none transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
                     onClick={() => setCurrentView('dm')}
                     title="Messages"
                   >
@@ -1324,27 +1402,83 @@ function App() {
                     )}
                   </div>
                 )}
-                {/* Notification and theme icons (unchanged) */}
-                <button className="text-xl text-yellow-500 focus:outline-none" title="Notifications" aria-label="Notifications">
+                {/* Create (+) Button */}
+                <div className="relative">
+                  <button
+                    className="w-9 h-9 flex items-center justify-center text-2xl text-blue-600 dark:text-blue-400 focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full border border-gray-200 dark:border-gray-700 shadow transition-all duration-200"
+                    title="Create"
+                    aria-label="Create"
+                    onClick={() => setShowCreateMenu(prev => !prev)}
+                  >
+                    +
+                  </button>
+                  {showCreateMenu && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 transition-all duration-200">
+                      <button
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-t-xl transition-colors duration-200"
+                        onClick={() => { setShowCreatePostModal(true); setShowCreateMenu(false); }}
+                      >
+                        Create Post
+                      </button>
+                      <button
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-b-xl transition-colors duration-200"
+                        onClick={() => { setShowCreateReelModal(true); setShowCreateMenu(false); }}
+                      >
+                        Create Reel
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Profile/Avatar Button */}
+                <button className="w-9 h-9 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white font-bold text-lg focus:outline-none transition-all duration-200 hover:scale-105">
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
+                </button>
+                {/* Options Menu (mobile only) */}
+                <div className="relative header-options-menu">
+                  <button
+                    className="sm:hidden w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 text-xl focus:outline-none transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => setShowOptionsMenu(prev => !prev)}
+                    title="More options"
+                    aria-label="More options"
+                  >
+                    &#8942;
+                  </button>
+                  {showOptionsMenu && (
+                    <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 transition-all duration-200">
+                      {/* Notifications */}
+                      <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200">
+                        <span role="img" aria-label="bell">🔔</span> Notifications
+                      </button>
+                      {/* Theme Toggle */}
+                      <button
+                        onClick={toggleDarkMode}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200"
+                      >
+                        <span>{darkMode ? '🌙' : '☀️'}</span> Theme
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Show notifications and theme toggle directly on >=sm screens */}
+                <button className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-xl text-yellow-500 focus:outline-none transition-all duration-200 hover:bg-yellow-50 dark:hover:bg-gray-800" title="Notifications" aria-label="Notifications">
                   <span role="img" aria-label="bell">🔔</span>
                 </button>
                 <button
                   onClick={toggleDarkMode}
+                  className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-xl text-gray-600 dark:text-gray-300 focus:outline-none transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
                   aria-label="Toggle dark mode"
-                  className="relative w-12 h-6 bg-gray-300 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none"
                 >
-                  <span
-                    className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white dark:bg-yellow-400 shadow transition-transform duration-300 ${darkMode ? 'translate-x-6' : ''}`}
-                  />
-                  <span className="absolute left-2 top-1 text-xs text-yellow-500 dark:text-gray-800 transition-opacity duration-300" style={{opacity: darkMode ? 0 : 1}}>☀️</span>
-                  <span className="absolute right-2 top-1 text-xs text-gray-800 dark:text-yellow-300 transition-opacity duration-300" style={{opacity: darkMode ? 1 : 0}}>🌙</span>
+                  {darkMode ? '🌙' : '☀️'}
                 </button>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </div>
               </div>
             </div>
           </div>
+          {/* ======= RESPONSIVE HEADER END ======= */}
+          {/* Real-time Create Page (swipe to show) */}
+          <CreateRealtimePage
+            visible={showRealtimeCreate}
+            onSwipeLeft={handleCreateSwipeLeft}
+          />
           {/* Main Content (Feed, Stories, etc.) */}
           {currentView === 'dm' ? (
             <DM
@@ -1435,24 +1569,50 @@ function App() {
               </>
             ) : null
           ) : currentView === 'feed' ? (
-            <Feed
-              posts={posts}
-              user={user}
-              comments={comments}
-              showComments={showComments}
-              commentText={commentText}
-              onLike={handleLike}
-              onCommentInput={handleCommentInput}
-              onSubmitComment={handleSubmitComment}
-              onDeleteComment={handleDeleteComment}
-              onToggleComments={toggleComments}
-              onNavigateToProfile={navigateToProfile}
-              onPostClick={openPostModal}
-              stories={stories}
-              onStoryView={handleStoryView}
-              onCreateStory={() => setShowCreateStoryModal(true)}
-              onDeleteStory={handleDeleteStory}
-            />
+            <>
+              {/* Mobile: Feed with swipe handlers */}
+              <div className="block sm:hidden" style={{ touchAction: 'none' }} {...feedSwipeHandlers}>
+                <Feed
+                  posts={posts}
+                  user={user}
+                  comments={comments}
+                  showComments={showComments}
+                  commentText={commentText}
+                  onLike={handleLike}
+                  onCommentInput={handleCommentInput}
+                  onSubmitComment={handleSubmitComment}
+                  onDeleteComment={handleDeleteComment}
+                  onToggleComments={toggleComments}
+                  onNavigateToProfile={navigateToProfile}
+                  onPostClick={openPostModal}
+                  stories={stories}
+                  onStoryView={handleStoryView}
+                  onCreateStory={() => setShowCreateStoryModal(true)}
+                  onDeleteStory={handleDeleteStory}
+                />
+              </div>
+              {/* Desktop: Feed without swipe handlers */}
+              <div className="hidden sm:block">
+                <Feed
+                  posts={posts}
+                  user={user}
+                  comments={comments}
+                  showComments={showComments}
+                  commentText={commentText}
+                  onLike={handleLike}
+                  onCommentInput={handleCommentInput}
+                  onSubmitComment={handleSubmitComment}
+                  onDeleteComment={handleDeleteComment}
+                  onToggleComments={toggleComments}
+                  onNavigateToProfile={navigateToProfile}
+                  onPostClick={openPostModal}
+                  stories={stories}
+                  onStoryView={handleStoryView}
+                  onCreateStory={() => setShowCreateStoryModal(true)}
+                  onDeleteStory={handleDeleteStory}
+                />
+              </div>
+            </>
           ) : currentView === 'reels' ? (
             <Reels
               reels={reels}

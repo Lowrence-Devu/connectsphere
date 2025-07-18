@@ -24,17 +24,68 @@ body.dark {
   position: relative;
 }
 
-/* Header Styles */
-.header {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  padding: 1rem 0;
+/* ======= HEADER ANIMATION & COMPACT STYLES START ======= */
+@keyframes headerIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-header-in {
+  animation: headerIn 0.6s cubic-bezier(.4,0,.2,1);
 }
 
+.header, .app-header {
+  gap: 0.5rem;
+  height: 3rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+@media (min-width: 640px) {
+  .header, .app-header {
+    gap: 1rem;
+    height: 4rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+.logo-animated {
+  transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+  will-change: transform;
+}
+.logo-animated:hover {
+  transform: scale(1.1) rotate(3deg);
+}
+/* ======= HEADER ANIMATION & COMPACT STYLES END ======= */
+
+/* Create (+) Button Dropdown */
+.create-dropdown {
+  border: 1.5px solid var(--header-border, #e5e7eb);
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.08);
+  background: var(--header-bg, #fff);
+  transition: all 0.2s cubic-bezier(.4,0,.2,1);
+  min-width: 10rem;
+  z-index: 100;
+}
+
+body.dark .header, body.dark .app-header {
+  background: #18181b;
+  border-color: #374151;
+}
+body.dark .create-dropdown {
+  background: #18181b;
+  border-color: #374151;
+}
+
+/* ======= HEADER STYLES END ======= */
+
+/* Header Styles */
 .header-content {
   width: 100vw;
   max-width: 100vw;
@@ -740,3 +791,4 @@ body.dark .comment-textarea, body.dark textarea.comment-textarea {
 body.dark .comment-textarea::placeholder {
   color: #bbb !important;
 }
+

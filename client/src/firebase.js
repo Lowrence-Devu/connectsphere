@@ -2,43 +2,16 @@ import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+  apiKey: "AIzaSyB_6LGyF2mTd8O_2sBPLcjKFlto0_ni_vM",
+  authDomain: "connect-e0f8b.firebaseapp.com",
+  projectId: "connect-e0f8b",
+  storageBucket: "connect-e0f8b.firebasestorage.app",
+  messagingSenderId: "574299953459",
+  appId: "1:574299953459:web:81790b4e48df9b96a98646",
+  measurementId: "G-KPTK6CN10W"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const messaging = getMessaging(app);
 
-// Request notification permission and get FCM token
-export const requestNotificationPermission = async () => {
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      const token = await getToken(messaging, {
-        vapidKey: process.env.REACT_APP_FIREBASE_VAPID_KEY
-      });
-      return token;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting notification permission:', error);
-    return null;
-  }
-};
-
-// Handle foreground messages
-export const onMessageListener = () => {
-  return new Promise((resolve) => {
-    onMessage(messaging, (payload) => {
-      resolve(payload);
-    });
-  });
-};
-
-export { messaging }; 
+export { messaging, getToken, onMessage }; 
