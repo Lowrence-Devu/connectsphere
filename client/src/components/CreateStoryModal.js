@@ -1,153 +1,88 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 
-const CreateStoryModal = ({ onClose, onCreate, uploading, error }) => {
+function CreateStoryModal({ onClose, onCreate, uploading, error }) {
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
-  const [caption, setCaption] = useState('');
-  const [mediaType, setMediaType] = useState('image');
-  const fileInputRef = useRef(null);
+  const [mediaType, setMediaType] = useState(null); // 'image' or 'video'
 
-  const handleFileSelect = (e) => {
+  const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
+    if (!file) return;
+    if (file.type.startsWith('image/')) {
+      setMediaType('image');
       setMediaFile(file);
-      setMediaType(file.type.startsWith('video/') ? 'video' : 'image');
-      
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setMediaPreview(e.target.result);
-      };
-      reader.readAsDataURL(file);
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (file.type.startsWith('video/')) {
+      setMediaType('video');
+      setMediaFile(file);
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      setMediaType(null);
+      setMediaFile(null);
+      setMediaPreview(null);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!mediaFile) return;
-
-    const formData = new FormData();
-    formData.append('media', mediaFile);
-    formData.append('caption', caption);
-    formData.append('mediaType', mediaType);
-
-    await onCreate(formData);
-    
-    // Reset form
+  const handleRemoveMedia = () => {
     setMediaFile(null);
     setMediaPreview(null);
-    setCaption('');
-    setMediaType('image');
-    onClose();
+    setMediaType(null);
   };
 
-  const handleClose = () => {
-    setMediaFile(null);
-    setMediaPreview(null);
-    setCaption('');
-    setMediaType('image');
-    onClose();
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!mediaFile) return;
+    onCreate({ mediaFile, mediaType });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Story</h2>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-          >
-            ✕
-          </button>
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg">
-            {error}
-          </div>
-        )}
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm transition-opacity duration-300">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 w-full max-w-xs sm:max-w-md relative transform transition-all duration-300 scale-95 opacity-0 animate-modal-in">
+        <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onClick={onClose}>
+          ✕
+        </button>
+        <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Add Story</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Media Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Media (Image or Video)
-            </label>
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
-              {mediaPreview ? (
-                <div className="space-y-2">
-                  {mediaType === 'video' ? (
-                    <video
-                      src={mediaPreview}
-                      className="max-h-48 mx-auto rounded"
-                      controls
-                    />
-                  ) : (
-                    <img
-                      src={mediaPreview}
-                      alt="Preview"
-                      className="max-h-48 mx-auto rounded"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Change Media
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Click to upload image or video
-                  </button>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          {/* Caption */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Caption (Optional)
-            </label>
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="What's happening?"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              rows={3}
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Image or Video</label>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
+            {mediaPreview && (
+              <div className="mt-3 relative">
+                {mediaType === 'image' ? (
+                  <img src={mediaPreview} alt="Preview" className="w-full rounded-lg object-cover max-h-60" />
+                ) : (
+                  <video src={mediaPreview} controls className="w-full rounded-lg max-h-60 bg-black" />
+                )}
+                <button
+                  type="button"
+                  className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-80"
+                  onClick={handleRemoveMedia}
+                  title="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* Submit Button */}
           <button
             type="submit"
+            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 disabled:opacity-60"
             disabled={!mediaFile || uploading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
           >
-            {uploading ? 'Creating Story...' : 'Create Story'}
+            {uploading ? 'Uploading...' : 'Add to Story'}
           </button>
+          {error && (
+            <div className="text-red-500 text-sm text-center mt-2">{error}</div>
+          )}
         </form>
-
-        <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          Stories disappear after 24 hours
-        </div>
       </div>
     </div>
   );
-};
+}
 
 export default CreateStoryModal; 

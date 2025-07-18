@@ -11,7 +11,9 @@ const Post = ({
   onDeleteComment,
   onToggleComments,
   onNavigateToProfile,
-  onDeletePost
+  onDeletePost,
+  onCommentInput,
+  onSubmitComment
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   if (!post) return null;
@@ -74,7 +76,7 @@ const Post = ({
       <div className="flex items-center space-x-8 mb-3">
         <button
           onClick={onLike}
-          className={`flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-semibold focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2 py-1 rounded transition`}
+          className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-semibold focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2 py-1 rounded transition"
         >
           <span>👍</span>
           <span>{post.likes?.length || 0}</span>
@@ -126,13 +128,14 @@ const Post = ({
               ))
             )}
           </div>
-          <form onSubmit={e => { e.preventDefault(); onAddComment(); }} className="flex items-center space-x-2 mt-3">
-            <input
-              type="text"
-              className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          <form onSubmit={e => { e.preventDefault(); onSubmitComment(post._id); }} className="flex items-center space-x-2 mt-3">
+            <textarea
+              className="w-full flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-y min-h-[40px] max-h-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
               placeholder="Add a comment..."
               value={commentText}
-              onChange={e => onAddComment(post._id, e.target.value)}
+              onChange={e => onCommentInput(post._id, e.target.value)}
+              rows={1}
+              maxLength={300}
             />
             <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Post</button>
           </form>

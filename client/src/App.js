@@ -3,15 +3,15 @@ import io from 'socket.io-client';
 import Feed from './components/Feed';
 import Profile from './components/Profile';
 import PostModal from './components/PostModal';
-import CreatePostModal from './components/CreatePostModal';
 import CreateStoryModal from './components/CreateStoryModal';
-import CreateReelModal from './components/CreateReelModal';
 import Reels from './components/Reels';
 import Explore from './components/Explore';
 import DM from './components/DM';
 import VideoCall from './components/VideoCall';
 import SplashScreen from './components/SplashScreen';
 import './components/SplashScreen.css';
+import Peer from 'simple-peer';
+import CallModal from './components/CallModal';
 
 // Add debugging for environment variables
 console.log('[App] Environment check:', {
@@ -107,13 +107,6 @@ function App() {
     return u;
   });
   const [posts, setPosts] = useState([]);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [comments, setComments] = useState({});
   const [commentText, setCommentText] = useState({});
   const [showComments, setShowComments] = useState({});
   const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
@@ -125,19 +118,15 @@ function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [searchHistory, setSearchHistory] = useState(JSON.parse(localStorage.getItem('searchHistory') || '[]'));
-  const [showFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    sortBy: 'username', // 'username', 'followers', 'recent'
-    minFollowers: '',
-    maxFollowers: '',
-    hasPosts: false
-  });
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [inbox, setInbox] = useState([]);
-  const [activeChat, setActiveChat] = useState(null); // user object
+  const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
+  const [uploadingStory, setUploadingStory] = useState(false);
+  const [createStoryError, setCreateStoryError] = useState('');
+  const [reels, setReels] = useState([]);
+  const [showCreateReelModal, setShowCreateReelModal] = useState(false);
+  const [uploadingReel, setUploadingReel] = useState(false);
+  const [createReelError, setCreateReelError] = useState('');
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -151,37 +140,42 @@ function App() {
   const [editError, setEditError] = useState('');
   const [selectedPost, setSelectedPost] = useState(null);
   const [showPostModal, setShowPostModal] = useState(false);
+  const [explorePosts, setExplorePosts] = useState([]);
+  const [stories, setStories] = useState([]);
+  const [inbox, setInbox] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+  const [comments, setComments] = useState({});
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [error, setError] = useState('');
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [uploadingPost, setUploadingPost] = useState(false);
   const [createPostError, setCreatePostError] = useState('');
-  const [explorePosts, setExplorePosts] = useState([]);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [profileMenuOption, setProfileMenuOption] = useState(null); // 'account', 'settings', null
-  
-  // Stories state
-  const [stories, setStories] = useState([]);
-  const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
-  const [uploadingStory, setUploadingStory] = useState(false);
-  const [createStoryError, setCreateStoryError] = useState('');
-
-  // Reels state
-  const [reels, setReels] = useState([]);
-  const [showCreateReelModal, setShowCreateReelModal] = useState(false);
-  const [uploadingReel, setUploadingReel] = useState(false);
-  const [createReelError, setCreateReelError] = useState('');
+  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editIsPrivate, setEditIsPrivate] = useState(user?.isPrivate || false);
 
   // Add hooks for handling Google OAuth redirect
   const location = window.location;
   
   // Add app initialization state
-  const [appInitialized, setAppInitialized] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   // Video call state
-  const [showVideoCall, setShowVideoCall] = useState(false);
-  const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
   const [globalCallActive, setGlobalCallActive] = useState(false);
   const [globalCalling, setGlobalCalling] = useState(false);
+
+  // Add state for advanced call logic
+  const [callModal, setCallModal] = useState({
+    show: false,
+    type: 'video',
+    incoming: false,
+    from: null,
+    username: '',
+  });
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [peer, setPeer] = useState(null);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     if (showSplash) return;
@@ -191,11 +185,11 @@ function App() {
         console.log('[App] Initializing application...');
         // Add a small delay to ensure all state is properly set
         await new Promise(resolve => setTimeout(resolve, 100));
-        setAppInitialized(true);
+        // setAppInitialized(true); // Removed as per edit hint
         console.log('[App] Application initialized successfully');
       } catch (error) {
         console.error('[App] Initialization error:', error);
-        setAppInitialized(true); // Still set to true to prevent infinite loading
+        // setAppInitialized(true); // Still set to true to prevent infinite loading
       }
     };
     
@@ -379,6 +373,7 @@ function App() {
     if (token && user?._id) {
       if (!socket.current) return;
       socket.current.on('receive_message', (msg) => {
+        console.log('Received message:', msg, 'Current user:', user._id);
         if (
           (activeChat && msg.sender._id === activeChat._id) ||
           (activeChat && msg.sender._id === user._id && msg.receiver === activeChat._id)
@@ -452,9 +447,10 @@ function App() {
   const handleSendMessage = () => {
     if (!messageText.trim() || !activeChat) return;
     const msg = {
-      sender: user._id,
-      receiver: activeChat._id,
-      text: messageText.trim()
+      sender: String(user._id),
+      receiver: String(activeChat._id),
+      text: messageText.trim(),
+      createdAt: new Date().toISOString()
     };
     console.log('Sending message:', msg);
     if (socket.current) {
@@ -504,213 +500,83 @@ function App() {
     }
   };
 
+  // Fetch comments for a post
   const fetchComments = async (postId) => {
     try {
       const res = await fetch(`${API_URL}/posts/${postId}/comments`);
       const data = await res.json();
       setComments(prev => ({ ...prev, [postId]: data }));
     } catch (err) {
-      console.error('Failed to fetch comments');
+      // Optionally handle error
     }
   };
 
-  const searchUsers = async (query) => {
-    if (!query.trim() || query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    
-    setSearching(true);
+  // Fetch a single post and update in posts state
+  const fetchSinglePost = async (postId) => {
     try {
-      const params = new URLSearchParams({
-        q: query,
-        sortBy: filters.sortBy,
-        ...(filters.minFollowers && { minFollowers: filters.minFollowers }),
-        ...(filters.maxFollowers && { maxFollowers: filters.maxFollowers }),
-        ...(filters.hasPosts && { hasPosts: 'true' })
-      });
-      
-      const res = await fetch(`${API_URL}/users/search?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_URL}/posts/${postId}`);
       const data = await res.json();
-      setSearchResults(data.users || []);
+      setPosts(prev => prev.map(p => p._id === postId ? data : p));
     } catch (err) {
-      console.error('Failed to search users');
-      setSearchResults([]);
-    }
-    setSearching(false);
-  };
-
-  const followUser = async (userId) => {
-    try {
-      const res = await fetch(`${API_URL}/users/${userId}/follow`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        // Update search results
-        setSearchResults(prev => prev.map(user => 
-          user._id === userId 
-            ? { ...user, followers: [...(user.followers || []), user?.id] }
-            : user
-        ));
-        // Update user profile if viewing it
-        if (userProfile && userProfile._id === userId) {
-          setUserProfile(prev => ({ ...prev, followers: [...(prev.followers || []), user?.id] }));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to follow user');
+      // Optionally handle error
     }
   };
 
-  const unfollowUser = async (userId) => {
-    try {
-      const res = await fetch(`${API_URL}/users/${userId}/unfollow`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        // Update search results
-        setSearchResults(prev => prev.map(user => 
-          user._id === userId 
-            ? { ...user, followers: user.followers?.filter(id => id !== user?.id) || [] }
-            : user
-        ));
-        // Update user profile if viewing it
-        if (userProfile && userProfile._id === userId) {
-          setUserProfile(prev => ({ 
-            ...prev, 
-            followers: prev.followers?.filter(id => id !== user?.id) || [] 
-          }));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to unfollow user');
-    }
-  };
-
-  const fetchUserProfile = async (userId) => {
-    setProfileLoading(true);
-    try {
-      // Fetch user profile
-      const profileRes = await fetch(`${API_URL}/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const profileData = await profileRes.json();
-      setUserProfile(profileData);
-
-      // Fetch user posts
-      const postsRes = await fetch(`${API_URL}/posts/user/${userId}`);
-      const postsData = await postsRes.json();
-      setUserPosts(postsData);
-    } catch (err) {
-      console.error('Failed to fetch user profile');
-    }
-    setProfileLoading(false);
-  };
-
-  const addToSearchHistory = (query) => {
-    if (!query.trim()) return;
-    const newHistory = [query, ...searchHistory.filter(item => item !== query)].slice(0, 10);
-    setSearchHistory(newHistory);
-    localStorage.setItem('searchHistory', JSON.stringify(newHistory));
-  };
-
-  const clearSearchHistory = () => {
-    setSearchHistory([]);
-    localStorage.removeItem('searchHistory');
-  };
-
-  const navigateToProfile = async (user) => {
-    setProfileLoading(true);
-    setShowSearch(false);
-    setSearchQuery('');
-    setSearchResults([]);
-    addToSearchHistory(user.username);
-    await fetchUserProfile(user._id);
-    setCurrentView('profile');
-  };
-
-  const goBackToFeed = () => {
-    setCurrentView('feed');
-    setUserProfile(null);
-    setUserPosts([]);
-  };
-
-  const handleAuth = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const endpoint = isLogin ? 'login' : 'register';
-      const body = isLogin
-        ? { email, password }
-        : { username, email, password };
-      const res = await fetch(`${API_URL}/auth/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setToken(data.token);
-        setUser(data.user);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-      } else {
-        setError(data.message || 'Authentication failed. Please check your credentials.');
-      }
-    } catch (err) {
-      console.error('Auth error:', err);
-      setError('Network error. Please check your connection and try again.');
-    }
-    setLoading(false);
-  };
-
-  const handleLogout = () => {
-    setToken('');
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    if (socket.current) socket.current.disconnect();
-  };
-
-
-
-  const handleLike = async (postId) => {
-    if (!token) return;
-    try {
-      await fetch(`${API_URL}/posts/${postId}/like`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Real-time update handled by socket
-    } catch (err) {
-      console.error('Failed to like post');
-    }
-  };
-
-  const handleAddComment = async (postId) => {
+  // Optimistic + accurate comment submit
+  const handleSubmitComment = async (postId) => {
     if (!commentText[postId]?.trim()) return;
-    
+    // Optimistic: add comment to UI
+    const newComment = {
+      _id: `temp-${Date.now()}`,
+      text: commentText[postId],
+      author: user,
+      createdAt: new Date().toISOString(),
+    };
+    setComments(prev => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), newComment],
+    }));
+    setCommentText(prev => ({ ...prev, [postId]: '' }));
     try {
-      const res = await fetch(`${API_URL}/posts/${postId}/comments`, {
+      await fetch(`${API_URL}/posts/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ text: commentText[postId] }),
+        body: JSON.stringify({ text: newComment.text }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setCommentText(prev => ({ ...prev, [postId]: '' }));
-        // Real-time update handled by socket
-      }
+      // Accurate: re-fetch comments
+      fetchComments(postId);
     } catch (err) {
-      console.error('Failed to add comment');
+      // Optionally handle error
+    }
+  };
+
+  // Optimistic + accurate like
+  const handleLike = async (postId) => {
+    // Optimistic: update likes in UI
+    setPosts(prev => prev.map(post => {
+      if (post._id === postId) {
+        const alreadyLiked = post.likes?.some(like => like === user._id);
+        return {
+          ...post,
+          likes: alreadyLiked
+            ? post.likes.filter(like => like !== user._id)
+            : [...(post.likes || []), user._id],
+        };
+      }
+      return post;
+    }));
+    try {
+      await fetch(`${API_URL}/posts/${postId}/like`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Accurate: re-fetch post
+      fetchSinglePost(postId);
+    } catch (err) {
+      // Optionally handle error
     }
   };
 
@@ -1069,113 +935,185 @@ function App() {
     }
   }, [fetchReels]);
 
-  const [editEmail, setEditEmail] = useState(user?.email || '');
-  const [editPassword, setEditPassword] = useState('');
-  const [editIsPrivate, setEditIsPrivate] = useState(user?.isPrivate || false);
-
   useEffect(() => {
     setEditUsername(user?.username || '');
     setEditEmail(user?.email || '');
     setEditIsPrivate(user?.isPrivate || false);
   }, [user]);
 
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 hover:scale-105">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">ConnectSphere</h1>
-            <p className="text-gray-600 dark:text-gray-300">Connect with friends and share your thoughts</p>
-          </div>
-          
-          <h2 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-white">
-            {isLogin ? 'Welcome Back' : 'Join ConnectSphere'}
-          </h2>
-          
-          <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
-                <input
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-              <input
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter your email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-              <input
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter your password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            
-            {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-            
-            <button
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  {isLogin ? 'Signing in...' : 'Creating account...'}
-                </div>
-              ) : (
-                isLogin ? 'Sign In' : 'Create Account'
-              )}
-            </button>
-          </form>
-          
-          <div className="mt-6 text-center">
-            <button
-              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors duration-200"
-              onClick={() => { setIsLogin(!isLogin); setError(''); }}
-            >
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </button>
-          </div>
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              className="w-full bg-white border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm"
-              onClick={() => window.location.href = `${API_URL.replace('/api', '')}/api/auth/google`}
-            >
-              <svg width="20" height="20" viewBox="0 0 48 48" className="mr-2"><g><path fill="#4285F4" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.23l6.85-6.85C35.64 2.68 30.18 0 24 0 14.82 0 6.73 5.82 2.69 14.09l7.98 6.19C12.13 13.16 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.55c0-1.64-.15-3.22-.42-4.74H24v9.01h12.42c-.54 2.9-2.18 5.36-4.65 7.01l7.19 5.6C43.98 37.13 46.1 31.3 46.1 24.55z"/><path fill="#FBBC05" d="M10.67 28.28c-1.13-3.36-1.13-6.99 0-10.35l-7.98-6.19C.9 15.1 0 19.41 0 24c0 4.59.9 8.9 2.69 12.26l7.98-6.19z"/><path fill="#EA4335" d="M24 48c6.18 0 11.64-2.05 15.53-5.59l-7.19-5.6c-2.01 1.35-4.59 2.15-7.34 2.15-6.38 0-11.87-3.66-14.33-8.99l-7.98 6.19C6.73 42.18 14.82 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></g></svg>
-              Sign in with Google
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Add this handler to update comment text as user types
+  const handleCommentInput = (postId, value) => {
+    setCommentText(prev => ({ ...prev, [postId]: value }));
+  };
 
-  // Show splash screen first
+  // Add this handler to submit a comment
+
+  // Search users by query
+  const searchUsers = async (query) => {
+    if (!query.trim() || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const params = new URLSearchParams({ q: query });
+      const res = await fetch(`${API_URL}/users/search?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setSearchResults(data.users || []);
+    } catch (err) {
+      setSearchResults([]);
+    }
+    setSearching(false);
+  };
+
+  // Fetch a user's profile and posts
+  const fetchUserProfile = async (userId) => {
+    setProfileLoading(true);
+    try {
+      const profileRes = await fetch(`${API_URL}/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const profileData = await profileRes.json();
+      setUserProfile(profileData);
+
+      const postsRes = await fetch(`${API_URL}/posts/user/${userId}`);
+      const postsData = await postsRes.json();
+      setUserPosts(postsData);
+    } catch (err) {
+      setUserProfile(null);
+      setUserPosts([]);
+    }
+    setProfileLoading(false);
+  };
+
+  // Navigate to a user's profile
+  const navigateToProfile = async (user) => {
+    setProfileLoading(true);
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    await fetchUserProfile(user._id);
+    setCurrentView('profile');
+  };
+
+  // Follow a user
+  const followUser = async (userId) => {
+    try {
+      await fetch(`${API_URL}/users/${userId}/follow`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchUserProfile(userId);
+    } catch (err) {}
+  };
+
+  // Unfollow a user
+  const unfollowUser = async (userId) => {
+    try {
+      await fetch(`${API_URL}/users/${userId}/unfollow`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchUserProfile(userId);
+    } catch (err) {}
+  };
+
+  // Advanced call handling
+  useEffect(() => {
+    if (!socket.current) return;
+    socket.current.on('call:incoming', ({ from, callType }) => {
+      const userObj = inbox.find(u => u._id === from) || {};
+      setCallModal({
+        show: true,
+        type: callType,
+        incoming: true,
+        from,
+        username: userObj.username || 'Unknown',
+      });
+    });
+    socket.current.on('call:accepted', ({ from }) => {
+      startPeer(true, callModal.type);
+    });
+    socket.current.on('call:declined', () => {
+      endCall();
+    });
+    socket.current.on('call:ended', () => {
+      endCall();
+    });
+    socket.current.on('call:signal', ({ from, signal }) => {
+      if (peer) peer.signal(signal);
+    });
+    return () => {
+      socket.current.off('call:incoming');
+      socket.current.off('call:accepted');
+      socket.current.off('call:declined');
+      socket.current.off('call:ended');
+      socket.current.off('call:signal');
+    };
+  }, [socket, peer, callModal.type, inbox]);
+
+  const initiateCall = (callType) => {
+    setCallModal({
+      show: true,
+      type: callType,
+      incoming: false,
+      from: activeChat._id,
+      username: activeChat.username,
+    });
+    socket.current.emit('call:initiate', { to: activeChat._id, from: user._id, callType });
+  };
+
+  const acceptCall = () => {
+    socket.current.emit('call:accept', { to: callModal.from, from: user._id });
+    startPeer(false, callModal.type);
+    setCallModal((prev) => ({ ...prev, incoming: false }));
+  };
+
+  const declineCall = () => {
+    socket.current.emit('call:decline', { to: callModal.from, from: user._id });
+    endCall();
+  };
+
+  const endCall = () => {
+    if (peer) peer.destroy();
+    setPeer(null);
+    setLocalStream(null);
+    setRemoteStream(null);
+    setCallModal({ show: false, type: 'video', incoming: false, from: null, username: '' });
+    socket.current.emit('call:end', { to: callModal.from, from: user._id });
+  };
+
+  const muteCall = () => {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => (track.enabled = !track.enabled));
+      setMuted((m) => !m);
+    }
+  };
+
+  const startPeer = async (initiator, type) => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: type === 'video',
+      audio: true,
+    });
+    setLocalStream(stream);
+    const newPeer = new Peer({
+      initiator,
+      trickle: false,
+      stream,
+    });
+    newPeer.on('signal', (signal) => {
+      socket.current.emit('call:signal', { to: callModal.from, from: user._id, signal });
+    });
+    newPeer.on('stream', (remoteStream) => {
+      setRemoteStream(remoteStream);
+    });
+    newPeer.on('close', endCall);
+    newPeer.on('error', endCall);
+    setPeer(newPeer);
+  };
+
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
@@ -1331,9 +1269,12 @@ function App() {
             <div className="max-w-2xl mx-auto px-4 flex items-center justify-between h-16">
               {/* Logo */}
               <div className="flex items-center space-x-4">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  ConnectSphere
-                </h1>
+                <img
+                  src="/connectsphere-logo.png"
+                  alt="ConnectSphere Logo"
+                  className="w-8 h-8 md:w-10 md:h-10 rounded-full shadow-sm mr-2 inline-block align-middle"
+                />
+                <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
               </div>
               {/* Header Right: DM icon (mobile Feed), Search bar (Explore) */}
               <div className="flex items-center space-x-4">
@@ -1417,6 +1358,8 @@ function App() {
               user={user}
               chatLoading={chatLoading}
               onNavigateToProfile={navigateToProfile}
+              onStartCall={initiateCall}
+              socket={socket.current}
             />
           ) : currentView === 'explore' ? (
             <Explore
@@ -1499,13 +1442,8 @@ function App() {
               showComments={showComments}
               commentText={commentText}
               onLike={handleLike}
-              onAddComment={(postId, value) => {
-                if (value !== undefined) {
-                  setCommentText(prev => ({ ...prev, [postId]: value }));
-                } else {
-                  handleAddComment(postId);
-                }
-              }}
+              onCommentInput={handleCommentInput}
+              onSubmitComment={handleSubmitComment}
               onDeleteComment={handleDeleteComment}
               onToggleComments={toggleComments}
               onNavigateToProfile={navigateToProfile}
@@ -1532,10 +1470,38 @@ function App() {
               comments={comments[selectedPost._id] || []}
               onClose={closePostModal}
               onLike={() => handleLike(selectedPost._id)}
-              onAddComment={() => handleAddComment(selectedPost._id)}
               onDeleteComment={handleDeleteComment}
               commentText={commentText[selectedPost._id] || ''}
-              setCommentText={val => setCommentText(prev => ({ ...prev, [selectedPost._id]: val }))}
+              onCommentInput={handleCommentInput}
+              onSubmitComment={handleSubmitComment}
+            />
+          )}
+          {showCreateStoryModal && (
+            <CreateStoryModal
+              onClose={() => setShowCreateStoryModal(false)}
+              onCreate={async ({ mediaFile, mediaType }) => {
+                const formData = new FormData();
+                formData.append('media', mediaFile);
+                formData.append('mediaType', mediaType);
+                await handleCreateStory(formData);
+              }}
+              uploading={uploadingStory}
+              error={createStoryError}
+            />
+          )}
+          {callModal.show && (
+            <CallModal
+              show={callModal.show}
+              type={callModal.type}
+              localStream={localStream}
+              remoteStream={remoteStream}
+              onEnd={endCall}
+              onMute={muteCall}
+              muted={muted}
+              incoming={callModal.incoming}
+              onAccept={acceptCall}
+              onDecline={declineCall}
+              username={callModal.username}
             />
           )}
         </div>

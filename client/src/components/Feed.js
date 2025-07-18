@@ -9,7 +9,8 @@ const Feed = ({
   showComments,
   commentText,
   onLike,
-  onAddComment,
+  onCommentInput,
+  onSubmitComment,
   onDeleteComment,
   onToggleComments,
   onNavigateToProfile,
@@ -49,7 +50,8 @@ const Feed = ({
           showComments={showComments[post._id]}
           commentText={commentText[post._id] || ''}
           onLike={() => onLike(post._id)}
-          onAddComment={() => onAddComment(post._id)}
+          onCommentInput={onCommentInput}
+          onSubmitComment={onSubmitComment}
           onDeleteComment={onDeleteComment}
           onToggleComments={() => onToggleComments(post._id)}
           onNavigateToProfile={onNavigateToProfile}

@@ -718,3 +718,25 @@ body.dark .tab-btn {
 body.dark .bottom-nav {
   background: rgba(0, 0, 0, 0.3);
 }
+
+/* Comment textarea fix for visibility */
+.comment-textarea, textarea.comment-textarea {
+  background: #fff !important;
+  color: #222 !important;
+  border: 1px solid #d1d5db !important;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+.comment-textarea::placeholder {
+  color: #888 !important;
+  opacity: 1;
+}
+body.dark .comment-textarea, body.dark textarea.comment-textarea {
+  background: #222 !important;
+  color: #fff !important;
+  border: 1px solid #444 !important;
+}
+body.dark .comment-textarea::placeholder {
+  color: #bbb !important;
+}
