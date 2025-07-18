@@ -21,7 +21,43 @@ const DM = ({
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeout = useRef(null);
   const [readMessages, setReadMessages] = useState({});
-  
+  const [mobileView, setMobileView] = useState('inbox'); // 'inbox' | 'chat'
+
+  // Detect mobile
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Handle browser back on mobile
+  useEffect(() => {
+    if (!isMobile) return;
+    const onPopState = (e) => {
+      if (mobileView === 'chat') {
+        setMobileView('inbox');
+        window.history.pushState({}, '');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isMobile, mobileView]);
+
+  // When a chat is selected on mobile, switch to chat view
+  const handleSelectChat = (chatUser) => {
+    onSelectChat(chatUser);
+    if (isMobile) {
+      setMobileView('chat');
+      window.history.pushState({}, '');
+    }
+  };
+
+  // When activeChat changes, auto-switch to chat view on mobile
+  useEffect(() => {
+    if (isMobile && activeChat) setMobileView('chat');
+  }, [isMobile, activeChat]);
+
   // Use the enhanced video call hook
   const {
     callActive,
@@ -122,11 +158,12 @@ const DM = ({
     return () => socket.off('message:read', handleRead);
   }, [socket]);
 
+  // Layout
   return (
     <div className="relative w-full">
-      <div className="flex flex-col md:flex-row h-[70vh] md:h-[80vh] w-full max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg overflow-hidden">
+      <div className={`flex h-[70vh] md:h-[80vh] w-full max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg overflow-hidden transition-all duration-300 ${isMobile ? 'flex-col' : 'flex-row'}`}>
         {/* Inbox/Sidebar */}
-        <div className="w-full md:w-1/3 h-48 md:h-full border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-col">
+        <div className={`w-full md:w-1/3 h-48 md:h-full border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-col transition-transform duration-300 ${isMobile ? (mobileView === 'inbox' ? 'block' : 'hidden') : ''}`}>
           <div className="p-4 font-bold text-lg text-blue-600 dark:text-blue-300 border-b border-gray-200 dark:border-gray-700">Inbox</div>
           <div className="flex-1 overflow-y-auto">
             {inbox.length === 0 ? (
@@ -138,7 +175,7 @@ const DM = ({
                   <div
                     key={chatUser._id}
                     className={`px-4 py-3 cursor-pointer flex items-center gap-3 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-150 rounded-xl mb-1 ${activeChat && activeChat._id === chatUser._id ? 'bg-blue-100 dark:bg-gray-700' : ''}`}
-                    onClick={() => onSelectChat(chatUser)}
+                    onClick={() => handleSelectChat(chatUser)}
                   >
                     <img
                       src={chatUser.profileImage || '/default-avatar.png'}
@@ -167,9 +204,20 @@ const DM = ({
           </div>
         </div>
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col h-full relative bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-blue-950 dark:to-purple-900 transition-colors duration-700">
+        <div className={`flex-1 flex flex-col h-full relative bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-blue-950 dark:to-purple-900 transition-colors duration-700 ${isMobile ? (mobileView === 'chat' ? 'block' : 'hidden') : ''}`}>
           {/* Chat Header */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-900 sticky top-0 z-10">
+            {isMobile && mobileView === 'chat' && (
+              <button
+                className="mr-3 p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-400"
+                onClick={() => setMobileView('inbox')}
+                aria-label="Back to inbox"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+            )}
             {activeChat && (
               <>
                 <div className="flex items-center gap-3 min-w-0">
