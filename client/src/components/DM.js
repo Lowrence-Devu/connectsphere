@@ -198,9 +198,11 @@ const DM = ({
                           {
                             typeof (chat.user?.username || chat.username) === 'string'
                               ? (chat.user?.username || chat.username)
-                              : (chat.user?._id || chat._id
-                                  ? `User-${(chat.user?._id || chat._id).slice(0, 6)}`
-                                  : 'Unknown')
+                              : (chat.user?.name || chat.name)
+                                ? (chat.user?.name || chat.name)
+                                : (chat.user?._id || chat._id
+                                    ? `User-${(chat.user?._id || chat._id).slice(-4)}`
+                                    : 'User')
                           }
                         </div>
                         <div className="truncate text-xs text-gray-500 dark:text-gray-300 mt-1">{typeof chat.lastMessage === 'string' ? chat.lastMessage : JSON.stringify(chat.lastMessage) || 'No messages yet'}</div>
@@ -238,9 +240,11 @@ const DM = ({
                           {
                             typeof (chat.user?.username || chat.username) === 'string'
                               ? (chat.user?.username || chat.username)
-                              : (chat.user?._id || chat._id
-                                  ? `User-${(chat.user?._id || chat._id).slice(0, 6)}`
-                                  : 'Unknown')
+                              : (chat.user?.name || chat.name)
+                                ? (chat.user?.name || chat.name)
+                                : (chat.user?._id || chat._id
+                                    ? `User-${(chat.user?._id || chat._id).slice(-4)}`
+                                    : 'User')
                           }
                           {chat.unread > 0 && (
                             <span className="ml-2 inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Unread" />
