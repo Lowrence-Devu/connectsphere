@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import io from 'socket.io-client';
 import Feed from './components/Feed';
 import Profile from './components/Profile';
+import Settings from './components/Settings';
 import PostModal from './components/PostModal';
 import CreateStoryModal from './components/CreateStoryModal';
+import CreatePostModal from './components/CreatePostModal';
 import Reels from './components/Reels';
 import Explore from './components/Explore';
 import DM from './components/DM';
@@ -12,9 +14,6 @@ import SplashScreen from './components/SplashScreen';
 import './components/SplashScreen.css';
 import Peer from 'simple-peer';
 import CallModal from './components/CallModal';
-import CreateRealtimePage from './components/CreateRealtimePage';
-import { useSwipeable } from 'react-swipeable';
-import { messaging, getToken, onMessage } from './firebase';
 
 // Add debugging for environment variables
 console.log('[App] Environment check:', {
@@ -156,6 +155,9 @@ function App() {
   const [createPostError, setCreatePostError] = useState('');
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [editIsPrivate, setEditIsPrivate] = useState(user?.isPrivate || false);
+  const [showLiveCamera, setShowLiveCamera] = useState(false);
+  const [liveStream, setLiveStream] = useState(null);
+  const [liveType, setLiveType] = useState(''); // 'post' or 'reel'
 
   // Add hooks for handling Google OAuth redirect
   const location = window.location;
@@ -180,14 +182,56 @@ function App() {
   const [peer, setPeer] = useState(null);
   const [muted, setMuted] = useState(false);
 
-  // Add showCreateMenu state to App component
-  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  // Add global loading states
+  const [isLoading, setIsLoading] = useState(false);
+  const [globalError, setGlobalError] = useState(null);
 
-  // Add state for options menu
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  // Global error handler
+  const handleGlobalError = (error, context = '') => {
+    console.error(`[App] Global error in ${context}:`, error);
+    setGlobalError(error.message || 'An unexpected error occurred');
+    
+    // Clear error after 5 seconds
+    setTimeout(() => {
+      setGlobalError(null);
+    }, 5000);
+  };
 
-  // Add state for real-time create page
-  const [showRealtimeCreate, setShowRealtimeCreate] = useState(false);
+  // Global loading handler
+  const withLoading = async (asyncFunction, context = '') => {
+    try {
+      setIsLoading(true);
+      await asyncFunction();
+    } catch (error) {
+      handleGlobalError(error, context);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Network status
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log('[App] Network is online');
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log('[App] Network is offline');
+      setGlobalError('You are offline. Some features may not work.');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (showSplash) return;
@@ -262,6 +306,9 @@ function App() {
   useEffect(() => {
     fetchPosts();
     if (token) {
+      // Check for users and create test users if needed
+      checkAndCreateTestUsers();
+      
       // Enhanced Socket.IO connection with better error handling
       const getSocketUrl = () => {
         const apiUrl = process.env.REACT_APP_API_URL;
@@ -285,57 +332,104 @@ function App() {
         return 'http://localhost:5000';
       };
       
-      socket.current = io(getSocketUrl(), {
-        transports: ['websocket', 'polling'],
-        timeout: 20000,
-        forceNew: true
-      });
-      
-      socket.current.on('connect', () => {
-        console.log('[App] Connected to server successfully');
-        window.socketConnected = true;
-        if (user?._id) {
-          socket.current.emit('join', user._id);
-        }
-      });
-      
-      socket.current.on('connect_error', (error) => {
-        console.error('[App] Socket connection error:', error);
-        window.socketConnected = false;
-      });
-      
-      socket.current.on('disconnect', (reason) => {
-        console.log('[App] Socket disconnected:', reason);
-        window.socketConnected = false;
-      });
-      
-      socket.current.on('newPost', (post) => {
-        setPosts(prev => [post, ...prev]);
-      });
-      
-      socket.current.on('postLiked', (data) => {
-        setPosts(prev => prev.map(post => 
-          post._id === data.postId 
-            ? { ...post, likes: data.likes }
-            : post
-        ));
-      });
-      
-      socket.current.on('newComment', (data) => {
-        setComments(prev => ({
-          ...prev,
-          [data.postId]: [...(prev[data.postId] || []), data.comment]
-        }));
-      });
+      const connectSocket = () => {
+        try {
+          socket.current = io(getSocketUrl(), {
+            transports: ['websocket', 'polling'],
+            timeout: 20000,
+            forceNew: true,
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000
+          });
+          
+          socket.current.on('connect', () => {
+            console.log('[App] Connected to server successfully');
+            window.socketConnected = true;
+            if (user?._id) {
+              socket.current.emit('join', user._id);
+            }
+          });
+          
+          socket.current.on('connect_error', (error) => {
+            console.error('[App] Socket connection error:', error);
+            window.socketConnected = false;
+          });
+          
+          socket.current.on('disconnect', (reason) => {
+            console.log('[App] Socket disconnected:', reason);
+            window.socketConnected = false;
+            
+            // Attempt to reconnect if not manually disconnected
+            if (reason !== 'io client disconnect') {
+              console.log('[App] Attempting to reconnect...');
+              setTimeout(() => {
+                if (socket.current) {
+                  socket.current.connect();
+                }
+              }, 2000);
+            }
+          });
+          
+          socket.current.on('reconnect', (attemptNumber) => {
+            console.log('[App] Reconnected after', attemptNumber, 'attempts');
+            window.socketConnected = true;
+            if (user?._id) {
+              socket.current.emit('join', user._id);
+            }
+          });
+          
+          socket.current.on('reconnect_error', (error) => {
+            console.error('[App] Reconnection error:', error);
+          });
+          
+          socket.current.on('reconnect_failed', () => {
+            console.error('[App] Reconnection failed');
+            window.socketConnected = false;
+          });
+          
+          socket.current.on('newPost', (post) => {
+            console.log('[App] New post received:', post);
+            setPosts(prev => [post, ...prev]);
+          });
+          
+          socket.current.on('postLiked', (data) => {
+            console.log('[App] Post liked:', data);
+            setPosts(prev => prev.map(post => 
+              post._id === data.postId 
+                ? { ...post, likes: data.likes }
+                : post
+            ));
+          });
+          
+          socket.current.on('newComment', (data) => {
+            console.log('[App] New comment received:', data);
+            setComments(prev => ({
+              ...prev,
+              [data.postId]: [...(prev[data.postId] || []), data.comment]
+            }));
+          });
 
-      // Listen for real-time notifications
-      socket.current.on('notification', (notif) => {
-        setNotifications(prev => [notif, ...prev]);
-        setUnreadCount(prev => prev + 1);
-      });
+          // Listen for real-time notifications
+          socket.current.on('notification', (notif) => {
+            console.log('[App] New notification received:', notif);
+            setNotifications(prev => [notif, ...prev]);
+            setUnreadCount(prev => prev + 1);
+          });
+          
+        } catch (error) {
+          console.error('[App] Socket initialization error:', error);
+        }
+      };
+      
+      connectSocket();
       
       return () => {
-        if (socket.current) socket.current.disconnect();
+        if (socket.current) {
+          console.log('[App] Disconnecting socket...');
+          socket.current.disconnect();
+        }
       };
     }
   }, [token, user?._id]);
@@ -471,15 +565,20 @@ function App() {
     setMessageText('');
   };
 
-  // Debounced search
+  // Enhanced debounced search effect with improved reliability
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchQuery.trim()) {
-        searchUsers(searchQuery);
+      const trimmedQuery = searchQuery.trim();
+      
+      if (trimmedQuery.length >= 2) {
+        searchUsers(trimmedQuery);
+      } else if (trimmedQuery.length === 0) {
+        setSearchResults([]);
+        setShowSearch(false);
       } else {
         setSearchResults([]);
       }
-    }, 300);
+    }, 250); // Slightly increased for better stability
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
@@ -498,17 +597,27 @@ function App() {
 
   const fetchPosts = async () => {
     try {
-      console.log('Fetching posts from:', `${API_URL}/posts`);
-      const res = await fetch(`${API_URL}/posts`);
+      console.log('Fetching posts...');
+      const res = await fetch(`${API_URL}/posts`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        throw new Error(`Failed to fetch posts: ${res.status}`);
       }
+      
       const data = await res.json();
-      console.log('Posts fetched successfully:', data.length, 'posts');
+      console.log('Posts fetched successfully:', data.length);
       setPosts(data);
     } catch (err) {
-      console.error('Failed to fetch posts:', err);
-      setError('Failed to load posts. Please check your connection.');
+      console.error('Error fetching posts:', err);
+      setError('Failed to load posts. Please refresh the page.');
+      
+      // Retry after 3 seconds
+      setTimeout(() => {
+        console.log('Retrying posts fetch...');
+        fetchPosts();
+      }, 3000);
     }
   };
 
@@ -536,59 +645,112 @@ function App() {
 
   // Optimistic + accurate comment submit
   const handleSubmitComment = async (postId) => {
-    if (!commentText[postId]?.trim()) return;
-    // Optimistic: add comment to UI
-    const newComment = {
-      _id: `temp-${Date.now()}`,
-      text: commentText[postId],
-      author: user,
-      createdAt: new Date().toISOString(),
-    };
-    setComments(prev => ({
-      ...prev,
-      [postId]: [...(prev[postId] || []), newComment],
-    }));
-    setCommentText(prev => ({ ...prev, [postId]: '' }));
+    const commentText = commentText[postId]?.trim();
+    if (!commentText) return;
+    
     try {
-      await fetch(`${API_URL}/posts/${postId}/comments`, {
+      // Optimistic update - add comment immediately
+      const optimisticComment = {
+        _id: `temp-${Date.now()}`,
+        text: commentText,
+        author: user,
+        postId: postId,
+        createdAt: new Date().toISOString(),
+        isOptimistic: true
+      };
+      
+      setComments(prev => ({
+        ...prev,
+        [postId]: [...(prev[postId] || []), optimisticComment]
+      }));
+      
+      // Clear input immediately
+      setCommentText(prev => ({ ...prev, [postId]: '' }));
+      
+      // Make API call
+      const res = await fetch(`${API_URL}/posts/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ text: newComment.text }),
+        body: JSON.stringify({ text: commentText })
       });
-      // Accurate: re-fetch comments
-      fetchComments(postId);
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to post comment');
+      }
+      
+      const newComment = await res.json();
+      console.log('Comment posted successfully:', newComment);
+      
+      // Replace optimistic comment with real one
+      setComments(prev => ({
+        ...prev,
+        [postId]: prev[postId].map(comment => 
+          comment.isOptimistic ? newComment : comment
+        )
+      }));
+      
     } catch (err) {
-      // Optionally handle error
+      console.error('Error posting comment:', err);
+      
+      // Remove optimistic comment on error
+      setComments(prev => ({
+        ...prev,
+        [postId]: prev[postId].filter(comment => !comment.isOptimistic)
+      }));
+      
+      // Restore comment text
+      setCommentText(prev => ({ ...prev, [postId]: commentText }));
+      
+      alert('Failed to post comment. Please try again.');
     }
   };
 
   // Optimistic + accurate like
   const handleLike = async (postId) => {
-    // Optimistic: update likes in UI
-    setPosts(prev => prev.map(post => {
-      if (post._id === postId) {
-        const alreadyLiked = post.likes?.some(like => like === user._id);
-        return {
-          ...post,
-          likes: alreadyLiked
-            ? post.likes.filter(like => like !== user._id)
-            : [...(post.likes || []), user._id],
-        };
-      }
-      return post;
-    }));
     try {
-      await fetch(`${API_URL}/posts/${postId}/like`, {
+      // Optimistic update - update UI immediately
+      setPosts(prev => prev.map(post => {
+        if (post._id === postId) {
+          const isLiked = post.likes?.includes(user?._id);
+          const newLikes = isLiked 
+            ? post.likes.filter(id => id !== user?._id)
+            : [...(post.likes || []), user?._id];
+          return { ...post, likes: newLikes };
+        }
+        return post;
+      }));
+      
+      // Make API call
+      const res = await fetch(`${API_URL}/posts/${postId}/like`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }
       });
-      // Accurate: re-fetch post
-      fetchSinglePost(postId);
+      
+      if (!res.ok) {
+        // Revert optimistic update on error
+        setPosts(prev => prev.map(post => {
+          if (post._id === postId) {
+            const isLiked = post.likes?.includes(user?._id);
+            const newLikes = isLiked 
+              ? post.likes.filter(id => id !== user?._id)
+              : [...(post.likes || []), user?._id];
+            return { ...post, likes: newLikes };
+          }
+          return post;
+        }));
+        throw new Error('Failed to update like');
+      }
+      
+      const data = await res.json();
+      console.log('Like updated successfully:', data);
+      
     } catch (err) {
-      // Optionally handle error
+      console.error('Error updating like:', err);
+      alert('Failed to update like. Please try again.');
     }
   };
 
@@ -679,23 +841,48 @@ function App() {
   };
 
   const handleCreatePostModal = async ({ caption, imageFile }) => {
+    console.log('handleCreatePostModal called with:', { caption, imageFile: imageFile?.name });
     setUploadingPost(true);
     setCreatePostError('');
     let imageUrl = '';
+    
     try {
+      // Validate file if provided
       if (imageFile) {
+        // Check file size (max 10MB)
+        if (imageFile.size > 10 * 1024 * 1024) {
+          throw new Error('Image file is too large. Please select a file smaller than 10MB.');
+        }
+        
+        // Check file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(imageFile.type)) {
+          throw new Error('Please select a valid image file (JPEG, PNG, GIF, or WebP).');
+        }
+        
+        console.log('Uploading image to server...');
         const formData = new FormData();
         formData.append('image', imageFile);
-        const res = await fetch(`${API_URL}/upload`, {
+        
+        const uploadRes = await fetch(`${API_URL}/upload`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         });
-        const data = await res.json();
-        if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
-        imageUrl = data.url;
+        
+        if (!uploadRes.ok) {
+          const errorData = await uploadRes.json();
+          throw new Error(errorData.message || 'Image upload failed. Please try again.');
+        }
+        
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
+        console.log('Image uploaded successfully:', imageUrl);
       }
-      const res = await fetch(`${API_URL}/posts`, {
+      
+      // Create post
+      console.log('Creating post with:', { text: caption, image: imageUrl });
+      const postRes = await fetch(`${API_URL}/posts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -703,15 +890,33 @@ function App() {
         },
         body: JSON.stringify({ text: caption, image: imageUrl })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to create post');
+      
+      if (!postRes.ok) {
+        const errorData = await postRes.json();
+        throw new Error(errorData.message || 'Failed to create post. Please try again.');
+      }
+      
+      const postData = await postRes.json();
+      console.log('Post created successfully:', postData);
+      
+      // Success - close modal and refresh posts
       setShowCreatePostModal(false);
       setUploadingPost(false);
       setCreatePostError('');
-      fetchPosts();
+      
+      // Show success message
+      alert('Post created successfully! 🎉');
+      
+      // Refresh posts with optimistic update
+      setPosts(prev => [postData, ...prev]);
+      
     } catch (err) {
-      setCreatePostError(err.message || 'Failed to create post');
+      console.error('Error in handleCreatePostModal:', err);
+      setCreatePostError(err.message || 'Failed to create post. Please try again.');
       setUploadingPost(false);
+      
+      // Show error message to user
+      alert(`Error: ${err.message}`);
     }
   };
 
@@ -960,76 +1165,402 @@ function App() {
 
   // Add this handler to submit a comment
 
-  // Search users by query
+  // Enhanced search users by query with improved reliability
   const searchUsers = async (query) => {
-    if (!query.trim() || query.length < 2) {
+    if (!query.trim()) {
       setSearchResults([]);
       return;
     }
+    
+    // Show loading state immediately
     setSearching(true);
-    try {
-      const params = new URLSearchParams({ q: query });
-      const res = await fetch(`${API_URL}/users/search?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setSearchResults(data.users || []);
-    } catch (err) {
+    setShowSearch(true);
+    
+    // Don't search if query is too short
+    if (query.trim().length < 1) {
       setSearchResults([]);
+      setSearching(false);
+      return;
     }
-    setSearching(false);
+    
+    try {
+      setSearching(true);
+      setGlobalError(''); // Clear any previous errors
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      
+      let searchResults = [];
+      
+      // Primary method: Use the backend search endpoint
+      try {
+        console.log('Searching with token:', token ? 'Token present' : 'No token');
+        console.log('Search URL:', `${API_URL}/users/search?q=${encodeURIComponent(query.trim())}&limit=8`);
+        
+        const searchRes = await fetch(`${API_URL}/users/search?q=${encodeURIComponent(query.trim())}&limit=8`, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal
+        });
+        
+        console.log('Search response status:', searchRes.status);
+        
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          searchResults = searchData.users || [];
+          console.log('Search results from backend:', searchResults);
+        } else {
+          const errorText = await searchRes.text();
+          console.error('Search response error:', errorText);
+          throw new Error(`Search failed: ${searchRes.status} - ${errorText}`);
+        }
+      } catch (primaryError) {
+        console.error('Primary search method failed:', primaryError);
+        
+        // Fallback: Get all users and filter client-side
+        try {
+          const allUsersRes = await fetch(`${API_URL}/users`, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            signal: controller.signal
+          });
+          
+          if (allUsersRes.ok) {
+            const allUsers = await allUsersRes.json();
+            
+            // Advanced filtering with multiple criteria
+            searchResults = allUsers.filter(user => {
+              if (!user || !user._id || !user.username) return false;
+              
+              const queryLower = query.toLowerCase();
+              const usernameLower = user.username.toLowerCase();
+              const emailLower = user.email ? user.email.toLowerCase() : '';
+              const bioLower = user.bio ? user.bio.toLowerCase() : '';
+              
+              return (
+                usernameLower.includes(queryLower) ||
+                emailLower.includes(queryLower) ||
+                bioLower.includes(queryLower) ||
+                usernameLower.startsWith(queryLower) // Prioritize exact matches
+              );
+            }).slice(0, 8); // Limit to 8 results for better performance
+            
+          } else {
+            throw new Error(`Failed to fetch users: ${allUsersRes.status}`);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback search also failed:', fallbackError);
+          
+          // Second fallback: Try to get users from posts
+          try {
+            const postsRes = await fetch(`${API_URL}/posts?limit=50`, {
+              headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              signal: controller.signal
+            });
+            
+            if (postsRes.ok) {
+              const posts = await postsRes.json();
+              const userMap = new Map();
+              
+              posts.forEach(post => {
+                if (post.author && post.author._id && post.author.username) {
+                  const queryLower = query.toLowerCase();
+                  const usernameLower = post.author.username.toLowerCase();
+                  
+                  if (!userMap.has(post.author._id) && 
+                      (usernameLower.includes(queryLower) || usernameLower.startsWith(queryLower))) {
+                    userMap.set(post.author._id, post.author);
+                  }
+                }
+              });
+              
+              searchResults = Array.from(userMap.values()).slice(0, 8);
+            } else {
+              throw new Error('All search methods failed');
+            }
+          } catch (finalError) {
+            console.error('All search methods failed:', finalError);
+            throw new Error('Search service temporarily unavailable');
+          }
+        }
+      }
+      
+      clearTimeout(timeoutId);
+      
+      // Final validation and processing
+      const validResults = searchResults.filter(user => 
+        user && user._id && user.username && user.username.trim()
+      ).map(user => ({
+        ...user,
+        displayName: user.username,
+        followers: user.followers || [],
+        following: user.following || [],
+        bio: user.bio || '',
+        profileImage: user.profileImage || '',
+        isPrivate: user.isPrivate || false,
+        createdAt: user.createdAt || new Date()
+      }));
+      
+      console.log('Final search results:', validResults);
+      setSearchResults(validResults);
+      
+      if (validResults.length === 0) {
+        // Show all users if no search results found
+        try {
+          const allUsersRes = await fetch(`${API_URL}/users`, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (allUsersRes.ok) {
+            const allUsers = await allUsersRes.json();
+            const allUserResults = allUsers.slice(0, 8).map(user => ({
+              ...user,
+              displayName: user.username,
+              followers: user.followers || [],
+              following: user.following || [],
+              bio: user.bio || '',
+              profileImage: user.profileImage || '',
+              isPrivate: user.isPrivate || false,
+              createdAt: user.createdAt || new Date()
+            }));
+            setSearchResults(allUserResults);
+          } else {
+            setSearchResults([{ 
+              _id: 'no-results', 
+              username: 'No users found', 
+              displayName: 'No users found',
+              isNoResults: true 
+            }]);
+          }
+        } catch (err) {
+          setSearchResults([{ 
+            _id: 'no-results', 
+            username: 'No users found', 
+            displayName: 'No users found',
+            isNoResults: true 
+          }]);
+        }
+      }
+      
+    } catch (err) {
+      console.error('Search error:', err);
+      
+      if (err.name === 'AbortError') {
+        setGlobalError('Search timed out. Please try again.');
+      } else {
+        setGlobalError(err.message || 'Search temporarily unavailable. Please try again.');
+      }
+      
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
+
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        console.log('Searching for:', searchQuery);
+        console.log('Current user:', user);
+        console.log('Current token:', token ? 'Present' : 'Missing');
+        searchUsers(searchQuery);
+        setShowSearch(true); // Always show search dropdown when typing
+      } else {
+        setSearchResults([]);
+        setShowSearch(false);
+      }
+    }, 200); // Reduced delay for faster response
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Click outside handler for search results
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showSearch && !event.target.closest('.search-container')) {
+        setShowSearch(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSearch]);
 
   // Fetch a user's profile and posts
   const fetchUserProfile = async (userId) => {
-    setProfileLoading(true);
     try {
-      const profileRes = await fetch(`${API_URL}/users/${userId}`, {
+      setProfileLoading(true);
+      console.log('Fetching user profile for:', userId);
+      
+      const res = await fetch(`${API_URL}/users/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const profileData = await profileRes.json();
-      setUserProfile(profileData);
-
-      const postsRes = await fetch(`${API_URL}/posts/user/${userId}`);
-      const postsData = await postsRes.json();
-      setUserPosts(postsData);
+      
+      if (!res.ok) {
+        throw new Error('Failed to fetch user profile');
+      }
+      
+      const data = await res.json();
+      console.log('User profile fetched successfully:', data);
+      setUserProfile(data);
+      
+      // Fetch user's posts
+      const postsRes = await fetch(`${API_URL}/users/${userId}/posts`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (postsRes.ok) {
+        const postsData = await postsRes.json();
+        setUserPosts(postsData);
+      }
+      
     } catch (err) {
-      setUserProfile(null);
-      setUserPosts([]);
+      console.error('Error fetching user profile:', err);
+      setError('Failed to load user profile. Please try again.');
+    } finally {
+      setProfileLoading(false);
     }
-    setProfileLoading(false);
   };
 
-  // Navigate to a user's profile
+  // Test function to check if users exist and create some if needed
+  const checkAndCreateTestUsers = async () => {
+    try {
+      console.log('Checking for existing users...');
+      const res = await fetch(`${API_URL}/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const users = await res.json();
+        console.log('Current users in system:', users.length);
+        
+        // If no users exist, create some test users
+        if (users.length === 0) {
+          console.log('No users found, creating test users...');
+          const testUsers = [
+            { username: 'john_doe', email: 'john@test.com', password: 'password123' },
+            { username: 'jane_smith', email: 'jane@test.com', password: 'password123' },
+            { username: 'mike_wilson', email: 'mike@test.com', password: 'password123' },
+            { username: 'sarah_jones', email: 'sarah@test.com', password: 'password123' },
+            { username: 'david_brown', email: 'david@test.com', password: 'password123' }
+          ];
+          
+          for (const testUser of testUsers) {
+            try {
+              await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testUser)
+              });
+              console.log('Created test user:', testUser.username);
+            } catch (err) {
+              console.log('Failed to create test user:', testUser.username, err);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error checking users:', err);
+    }
+  };
+
+  // Enhanced navigate to a user's profile with better reliability
   const navigateToProfile = async (user) => {
-    setProfileLoading(true);
-    setShowSearch(false);
-    setSearchQuery('');
-    setSearchResults([]);
-    await fetchUserProfile(user._id);
-    setCurrentView('profile');
+    console.log('navigateToProfile called with:', user);
+    if (!user || !user._id) {
+      console.error('Invalid user data:', user);
+      setGlobalError('Invalid user data. Please try again.');
+      return;
+    }
+    
+    try {
+      setProfileLoading(true);
+      setShowSearch(false);
+      setSearchQuery('');
+      setSearchResults([]);
+      setGlobalError(''); // Clear any previous errors
+      
+      // Optimistic UI update
+      setCurrentView('profile');
+      console.log('Set current view to profile');
+      
+      await fetchUserProfile(user._id);
+      console.log('Fetched user profile successfully');
+      
+      // Success feedback
+      console.log(`Successfully navigated to ${user.username}'s profile`);
+      
+    } catch (err) {
+      console.error('Error navigating to profile:', err);
+      setGlobalError('Failed to load user profile. Please try again.');
+      // Revert optimistic update
+      setCurrentView('explore');
+    } finally {
+      setProfileLoading(false);
+    }
   };
 
   // Follow a user
   const followUser = async (userId) => {
     try {
-      await fetch(`${API_URL}/users/${userId}/follow`, {
+      // Optimistic update
+      setUserProfile(prev => prev ? { ...prev, followers: [...(prev.followers || []), user._id] } : prev);
+      
+      const res = await fetch(`${API_URL}/users/${userId}/follow`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchUserProfile(userId);
-    } catch (err) {}
+      
+      if (!res.ok) {
+        // Revert optimistic update
+        setUserProfile(prev => prev ? { ...prev, followers: prev.followers.filter(id => id !== user._id) } : prev);
+        throw new Error('Failed to follow user');
+      }
+      
+      console.log('User followed successfully');
+      
+    } catch (err) {
+      console.error('Error following user:', err);
+      alert('Failed to follow user. Please try again.');
+    }
   };
 
   // Unfollow a user
   const unfollowUser = async (userId) => {
     try {
-      await fetch(`${API_URL}/users/${userId}/unfollow`, {
-        method: 'POST',
+      // Optimistic update
+      setUserProfile(prev => prev ? { ...prev, followers: prev.followers.filter(id => id !== user._id) } : prev);
+      
+      const res = await fetch(`${API_URL}/users/${userId}/unfollow`, {
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchUserProfile(userId);
-    } catch (err) {}
+      
+      if (!res.ok) {
+        // Revert optimistic update
+        setUserProfile(prev => prev ? { ...prev, followers: [...(prev.followers || []), user._id] } : prev);
+        throw new Error('Failed to unfollow user');
+      }
+      
+      console.log('User unfollowed successfully');
+      
+    } catch (err) {
+      console.error('Error unfollowing user:', err);
+      alert('Failed to unfollow user. Please try again.');
+    }
   };
 
   // Advanced call handling
@@ -1098,9 +1629,13 @@ function App() {
   };
 
   const muteCall = () => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach(track => (track.enabled = !track.enabled));
-      setMuted((m) => !m);
+    setMuted(!muted);
+    if (peer) {
+      peer.getSenders().forEach(sender => {
+        if (sender.track && sender.track.kind === 'audio') {
+          sender.track.enabled = !muted;
+        }
+      });
     }
   };
 
@@ -1126,546 +1661,926 @@ function App() {
     setPeer(newPeer);
   };
 
-  // Add click outside handler to close menu
-  useEffect(() => {
-    if (!showCreateMenu) return;
-    const handleClick = (e) => {
-      if (!e.target.closest('.relative')) setShowCreateMenu(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showCreateMenu]);
-
-  // Add click outside handler for options menu
-  useEffect(() => {
-    if (!showOptionsMenu) return;
-    const handleClick = (e) => {
-      if (!e.target.closest('.header-options-menu')) setShowOptionsMenu(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showOptionsMenu]);
-
-  // Handler for swipe right on feed (mobile)
-  const handleFeedSwipeRight = () => {
-    setShowRealtimeCreate(true);
-  };
-  // Handler for swipe left on create page
-  const handleCreateSwipeLeft = () => {
-    setShowRealtimeCreate(false);
+  const handleLivePost = async () => {
+    try {
+      setLiveType('post');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 1920 }, 
+          height: { ideal: 1080 },
+          facingMode: 'environment'
+        }, 
+        audio: true 
+      });
+      setLiveStream(stream);
+      setShowLiveCamera(true);
+    } catch (error) {
+      console.error('Camera access error:', error);
+      alert('Please allow camera access to create live content');
+    }
   };
 
-  // Always call useSwipeable at the top level (never inside a conditional)
-  const feedSwipeHandlers = useSwipeable({
-    onSwipedRight: handleFeedSwipeRight,
-    preventDefaultTouchmoveEvent: true,
-    trackMouse: true,
-  });
+  const handleLiveReel = async () => {
+    try {
+      setLiveType('reel');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 1080 }, 
+          height: { ideal: 1920 },
+          facingMode: 'environment'
+        }, 
+        audio: true 
+      });
+      setLiveStream(stream);
+      setShowLiveCamera(true);
+    } catch (error) {
+      console.error('Camera access error:', error);
+      alert('Please allow camera access to create live content');
+    }
+  };
 
-  useEffect(() => {
-    // Request notification permission and get FCM token
-    Notification.requestPermission().then((permission) => {
-      if (permission === 'granted') {
-        getToken(messaging, { vapidKey: 'BBgcB4o5eNEqKULI5DZM3cA7S-cRle7G5LsSfx6sQNuzNUH1dn1M9V5eHoCW5tJRY-lNbdxDJRWHECN4JX4AOsc' })
-          .then((currentToken) => {
-            if (currentToken) {
-              console.log('FCM Token:', currentToken);
-              // TODO: Send this token to your backend to save for this user
-            } else {
-              console.log('No registration token available.');
-            }
-          })
-          .catch((err) => {
-            console.log('An error occurred while retrieving token. ', err);
-          });
-      }
-    });
-    // Listen for foreground FCM messages
-    const unsubscribe = onMessage(messaging, (payload) => {
-      console.log('FCM Foreground Message:', payload);
-      // TODO: Replace alert with a custom toast/notification UI
-      alert(`Notification: ${payload.notification?.title || 'New Message'}\n${payload.notification?.body || ''}`);
-    });
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, []);
+  const stopLiveStream = () => {
+    if (liveStream) {
+      liveStream.getTracks().forEach(track => track.stop());
+      setLiveStream(null);
+    }
+    setShowLiveCamera(false);
+    setLiveType('');
+  };
+
+  const captureLiveContent = async () => {
+    if (!liveStream) return;
+    
+    try {
+      const canvas = document.createElement('canvas');
+      const video = document.createElement('video');
+      video.srcObject = liveStream;
+      await video.play();
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      
+      canvas.toBlob(async (blob) => {
+        const file = new File([blob], `live-${liveType}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        if (liveType === 'post') {
+          setShowCreatePostModal(true);
+          // You can pass the captured file to the post modal
+        } else if (liveType === 'reel') {
+          setShowCreateReelModal(true);
+          // You can pass the captured file to the reel modal
+        }
+        
+        stopLiveStream();
+      }, 'image/jpeg');
+    } catch (error) {
+      console.error('Capture error:', error);
+      alert('Failed to capture content');
+    }
+  };
+
+
 
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-blue-950 transition-colors duration-500">
-      {/* Sidebar: Desktop only */}
-      <nav className="hidden md:flex fixed top-0 left-0 h-screen w-64 z-50 bg-black flex-col items-start py-8 border-r border-gray-800">
-        <div className="mb-10 pl-8">
-          <span className="text-3xl font-bold text-white tracking-tight">ConnectSphere</span>
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-950 dark:to-blue-950 transition-all duration-700 relative overflow-hidden">
+      {/* Professional Background Pattern */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.1),transparent_50%)] dark:bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.02)_25%,rgba(255,255,255,0.02)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.02)_75%)] dark:bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.01)_25%,rgba(255,255,255,0.01)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.01)_75%)] bg-[length:20px_20px]"></div>
+      
+      {/* Floating Elements for Professional Touch */}
+      <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+      <div className="absolute bottom-20 right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+      <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl animate-pulse delay-500"></div>
+      
+      {/* Global Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl p-8 flex flex-col items-center shadow-2xl border border-white/20 dark:border-gray-700/20">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600 mb-4"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-400 animate-ping"></div>
+            </div>
+            <p className="text-gray-700 dark:text-gray-300 font-medium">Loading...</p>
+          </div>
         </div>
-        <button
-          className={`flex items-center w-full mb-2 pl-8 py-3 rounded-lg transition-all duration-200 focus:outline-none ${currentView === 'feed' ? 'bg-gray-900 text-blue-500 font-bold' : 'text-white hover:bg-gray-800'}`}
-          onClick={() => setCurrentView('feed')}
-          title="Feed"
-          aria-label="Feed"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white mr-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
-          </svg>
-          <span className="ml-5 text-lg">Feed</span>
-        </button>
-        <button
-          className={`flex items-center w-full mb-2 pl-8 py-3 rounded-lg transition-all duration-200 focus:outline-none ${currentView === 'explore' ? 'bg-gray-900 text-blue-500 font-bold' : 'text-white hover:bg-gray-800'}`}
-          onClick={() => setCurrentView('explore')}
-          title="Explore"
-          aria-label="Explore"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white mr-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-          </svg>
-          <span className="ml-5 text-lg">Explore</span>
-        </button>
-        <button
-          className={`flex items-center w-full mb-2 pl-8 py-3 rounded-lg transition-all duration-200 focus:outline-none ${currentView === 'reels' ? 'bg-gray-900 text-blue-500 font-bold' : 'text-white hover:bg-gray-800'}`}
-          onClick={() => setCurrentView('reels')}
-          title="Reels"
-          aria-label="Reels"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white mr-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
-          </svg>
-          <span className="ml-5 text-lg">Reels</span>
-        </button>
-        <button
-          className={`flex items-center w-full mb-2 pl-8 py-3 rounded-lg transition-all duration-200 focus:outline-none ${currentView === 'dm' ? 'bg-gray-900 text-blue-500 font-bold' : 'text-white hover:bg-gray-800'}`}
-          onClick={() => setCurrentView('dm')}
-          title="Messages"
-          aria-label="Messages"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white mr-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
-          </svg>
-          <span className="ml-5 text-lg">Messages</span>
-        </button>
-        <button
-          className={`flex items-center w-full mb-2 pl-8 py-3 rounded-lg transition-all duration-200 focus:outline-none ${currentView === 'profile' ? 'bg-gray-900 text-blue-500 font-bold' : 'text-white hover:bg-gray-800'}`}
-          onClick={() => {
-            setCurrentView('profile');
-            if (user && user._id) {
-              setUserProfile(user);
-              fetchUserProfile(user._id);
-            }
-          }}
-          title="Profile"
-          aria-label="Profile"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white mr-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
-          </svg>
-          <span className="ml-5 text-lg">Profile</span>
-        </button>
-      </nav>
-      {/* Bottom Nav Bar: Mobile only */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 w-full z-50 bg-white dark:bg-gray-900 flex justify-around items-center h-16 shadow">
-        <button
-          className={`flex flex-col items-center focus:outline-none ${currentView === 'feed' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('feed')}
-          title="Feed"
-          aria-label="Feed"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
-          </svg>
-          <span className="text-xs">Feed</span>
-        </button>
-        <button
-          className={`flex flex-col items-center focus:outline-none ${currentView === 'explore' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('explore')}
-          title="Explore"
-          aria-label="Explore"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-          </svg>
-          <span className="text-xs">Explore</span>
-        </button>
-        <button
-          className={`flex flex-col items-center focus:outline-none ${currentView === 'reels' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('reels')}
-          title="Reels"
-          aria-label="Reels"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
-          </svg>
-          <span className="text-xs">Reels</span>
-        </button>
-        <button
-          className={`flex flex-col items-center focus:outline-none ${currentView === 'dm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => setCurrentView('dm')}
-          title="Messages"
-          aria-label="Messages"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
-          </svg>
-          <span className="text-xs">Messages</span>
-        </button>
-        <button
-          className={`flex flex-col items-center focus:outline-none ${currentView === 'profile' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
-          onClick={() => {
-            setCurrentView('profile');
-            if (user && user._id) {
-              setUserProfile(user);
-              fetchUserProfile(user._id);
-            }
-          }}
-          title="Profile"
-          aria-label="Profile"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
-          </svg>
-          <span className="text-xs">Profile</span>
-        </button>
-      </nav>
-      {/* Main Content Area */}
-      <main className="md:ml-64 flex flex-col items-center justify-start min-h-screen py-8 px-2 transition-all duration-500">
-        <div className="w-full max-w-2xl mx-auto">
-          {/* Global VideoCall UI: shows for incoming calls anywhere in the app */}
-          {showVideoCall && globalIncomingCall && (
-            <VideoCall
-              show={showVideoCall}
-              onClose={() => setShowVideoCall(false)}
-              call={globalIncomingCall}
-              user={user}
-              activeChat={globalIncomingCall.callerUser}
-            />
-          )}
-          {/* ======= RESPONSIVE HEADER START ======= */}
-          <div className="bg-white/90 dark:bg-gray-900/90 border border-gray-200 dark:border-gray-700 shadow sticky top-0 z-50 rounded-b-2xl px-1 xs:px-2 sm:px-4 md:px-8 transition-all duration-500 ease-in-out w-full max-w-full animate-header-in backdrop-blur-md hover:shadow-lg focus-within:shadow-xl">
-            <div className="max-w-2xl mx-auto flex flex-nowrap items-center justify-between h-11 xs:h-12 sm:h-14 md:h-16 gap-1 xs:gap-2 sm:gap-4 md:gap-6 min-w-0">
-              {/* Logo */}
-              <div className="flex items-center gap-1 xs:gap-2 sm:gap-4 min-w-0">
-                <img
-                  src="/connectsphere-logo.png"
-                  alt="ConnectSphere Logo"
-                  className="w-7 h-7 sm:w-9 sm:h-9 rounded-full shadow-sm mr-1 sm:mr-2 inline-block align-middle transition-transform duration-300 hover:scale-110 hover:rotate-3"
-                  style={{ willChange: 'transform' }}
-                />
-                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle select-none transition-all duration-300 hidden min-[400px]:inline">Connectsphere</span>
+      )}
+
+      {/* Global Error Toast */}
+      {globalError && (
+        <div className="fixed top-4 right-4 bg-red-500/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl z-50 max-w-sm border border-red-400/20 animate-in slide-in-from-right-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-sm">{globalError}</p>
+            </div>
+            <button 
+              onClick={() => setGlobalError('')}
+              className="flex-shrink-0 text-white/80 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Network Status Indicator */}
+      {!isOnline && (
+        <div className="fixed top-4 left-4 bg-amber-500/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl z-50 border border-amber-400/20 animate-in slide-in-from-left-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Offline Mode</p>
+              <p className="text-xs text-amber-100">Limited functionality</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar: Desktop only */}
+      <nav className="hidden md:flex fixed top-0 left-0 h-screen w-72 z-50 bg-black/95 backdrop-blur-xl flex-col items-start py-8 border-r border-white/10 shadow-2xl">
+        <div className="mb-12 pl-8">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl transform hover:scale-105 transition-all duration-300">
+              <span className="text-white font-bold text-xl">C</span>
+            </div>
+            <div>
+              <span className="text-2xl font-bold text-white tracking-tight bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent">ConnectSphere</span>
+              <p className="text-xs text-gray-400 mt-1">Social Network</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 w-full space-y-3 px-4">
+          <button
+            className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'feed' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
+            onClick={() => setCurrentView('feed')}
+            title="Feed"
+            aria-label="Feed"
+          >
+            <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'feed' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
+              </svg>
+            </div>
+            <span className="text-lg ml-4">Feed</span>
+            {currentView === 'feed' && (
+              <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            )}
+          </button>
+          <button
+            className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'explore' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
+            onClick={() => setCurrentView('explore')}
+            title="Explore"
+            aria-label="Explore"
+          >
+            <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'explore' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+              </svg>
+            </div>
+            <span className="text-lg ml-4">Explore</span>
+            {currentView === 'explore' && (
+              <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            )}
+          </button>
+          <button
+            className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'reels' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
+            onClick={() => setCurrentView('reels')}
+            title="Reels"
+            aria-label="Reels"
+          >
+            <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'reels' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
+              </svg>
+            </div>
+            <span className="text-lg ml-4">Reels</span>
+            {currentView === 'reels' && (
+              <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            )}
+          </button>
+          <button
+            className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'dm' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
+            onClick={() => setCurrentView('dm')}
+            title="Messages"
+            aria-label="Messages"
+          >
+            <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'dm' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
+              </svg>
+            </div>
+            <span className="text-lg ml-4">Messages</span>
+            {currentView === 'dm' && (
+              <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            )}
+          </button>
+          <button
+            className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'profile' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
+            onClick={() => {
+              setCurrentView('profile');
+              if (user && user._id) {
+                setUserProfile(user);
+                fetchUserProfile(user._id);
+              }
+            }}
+            title="Profile"
+            aria-label="Profile"
+          >
+            <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'profile' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
+              </svg>
+            </div>
+            <span className="text-lg ml-4">Profile</span>
+            {currentView === 'profile' && (
+              <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            )}
+          </button>
+        </div>
+        <div className="px-8 w-full">
+          <div className="bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-xl">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-2xl transform hover:scale-105 transition-all duration-300">
+                {user?.username?.[0]?.toUpperCase() || 'U'}
               </div>
-              {/* Header Right: DM icon (mobile Feed), Search bar (Explore) */}
-              <div className="flex items-center gap-1 xs:gap-2 sm:gap-4 md:gap-6 flex-nowrap min-w-0">
-                {/* DM Icon on Feed page (mobile only) */}
-                {currentView === 'feed' && (
-                  <button
-                    className="md:hidden w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 text-2xl focus:outline-none transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    onClick={() => setCurrentView('dm')}
-                    title="Messages"
-                  >
-                    💬
-                  </button>
-                )}
-                {/* Search bar: only on Explore page for mobile, all pages for md+ */}
-                {(currentView === 'explore' || window.innerWidth >= 768) && (
-                  <div className="relative w-full max-w-md mx-auto search-container">
-                    <input
-                      type="text"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Search users..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      onFocus={() => setShowSearch(true)}
-                      aria-label="Search users"
-                    />
-                    {showSearch && searchResults.length > 0 && (
-                      <ul className="absolute left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
-                        {searchResults.map(user => (
-                          <li
-                            key={user._id}
-                            className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-150"
-                            onMouseDown={() => navigateToProfile(user)}
-                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToProfile(user); } }}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Go to profile of ${user.username}`}
-                          >
-                            <img
-                              src={user.profileImage || '/default-avatar.png'}
-                              alt={user.username}
-                              className="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-gray-600"
-                            />
-                            <span className="font-medium text-gray-800 dark:text-white">{user.username}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-                {/* Create (+) Button */}
-                <div className="relative">
-                  <button
-                    className="w-9 h-9 flex items-center justify-center text-2xl text-blue-600 dark:text-blue-400 focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full border border-gray-200 dark:border-gray-700 shadow transition-all duration-200"
-                    title="Create"
-                    aria-label="Create"
-                    onClick={() => setShowCreateMenu(prev => !prev)}
-                  >
-                    +
-                  </button>
-                  {showCreateMenu && (
-                    <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 transition-all duration-200">
-                      <button
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-t-xl transition-colors duration-200"
-                        onClick={() => { setShowCreatePostModal(true); setShowCreateMenu(false); }}
-                      >
-                        Create Post
-                      </button>
-                      <button
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-b-xl transition-colors duration-200"
-                        onClick={() => { setShowCreateReelModal(true); setShowCreateMenu(false); }}
-                      >
-                        Create Reel
-                      </button>
-                    </div>
-                  )}
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-sm truncate">{user?.username || 'User'}</p>
+                <p className="text-gray-400 text-xs truncate">{user?.email || 'user@example.com'}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-green-400">Online</span>
                 </div>
-                {/* Profile/Avatar Button */}
-                <button className="w-9 h-9 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white font-bold text-lg focus:outline-none transition-all duration-200 hover:scale-105">
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </button>
-                {/* Options Menu (mobile only) */}
-                <div className="relative header-options-menu">
-                  <button
-                    className="sm:hidden w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 text-xl focus:outline-none transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    onClick={() => setShowOptionsMenu(prev => !prev)}
-                    title="More options"
-                    aria-label="More options"
-                  >
-                    &#8942;
-                  </button>
-                  {showOptionsMenu && (
-                    <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 transition-all duration-200">
-                      {/* Notifications */}
-                      <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200">
-                        <span role="img" aria-label="bell">🔔</span> Notifications
-                      </button>
-                      {/* Theme Toggle */}
-                      <button
-                        onClick={toggleDarkMode}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200"
-                      >
-                        <span>{darkMode ? '🌙' : '☀️'}</span> Theme
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {/* Show notifications and theme toggle directly on >=sm screens */}
-                <button className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-xl text-yellow-500 focus:outline-none transition-all duration-200 hover:bg-yellow-50 dark:hover:bg-gray-800" title="Notifications" aria-label="Notifications">
-                  <span role="img" aria-label="bell">🔔</span>
-                </button>
-                <button
-                  onClick={toggleDarkMode}
-                  className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-xl text-gray-600 dark:text-gray-300 focus:outline-none transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  aria-label="Toggle dark mode"
-                >
-                  {darkMode ? '🌙' : '☀️'}
-                </button>
               </div>
             </div>
           </div>
-          {/* ======= RESPONSIVE HEADER END ======= */}
-          {/* Real-time Create Page (swipe to show) */}
-          <CreateRealtimePage
-            visible={showRealtimeCreate}
-            onSwipeLeft={handleCreateSwipeLeft}
-          />
-          {/* Main Content (Feed, Stories, etc.) */}
-          {currentView === 'dm' ? (
-            <DM
-              inbox={inbox}
-              activeChat={activeChat}
-              messages={messages}
-              onSelectChat={userObj => setActiveChat(userObj)}
-              onSendMessage={handleSendMessage}
-              messageText={messageText}
-              setMessageText={setMessageText}
-              user={user}
-              chatLoading={chatLoading}
-              onNavigateToProfile={navigateToProfile}
-              onStartCall={initiateCall}
-              socket={socket.current}
-            />
-          ) : currentView === 'explore' ? (
-            <Explore
-              posts={explorePosts}
-              onPostClick={openPostModal}
-              onSearch={fetchExplorePosts}
-            />
-          ) : currentView === 'profile' ? (
-            profileLoading ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+        </div>
+      </nav>
+      {/* Enhanced Bottom Nav Bar: Mobile only */}
+      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 w-full z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-white/10 dark:border-gray-700/10 shadow-xl">
+        <div className="flex justify-around items-center h-18 px-3 py-2">
+          {/* Feed */}
+          <button
+            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              currentView === 'feed' 
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
+                : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+            }`}
+            onClick={() => setCurrentView('feed')}
+            title="Feed"
+            aria-label="Feed"
+          >
+            <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'feed' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium mt-0.5">Feed</span>
+            {currentView === 'feed' && (
+              <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
+            )}
+          </button>
+
+          {/* Explore */}
+          <button
+            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              currentView === 'explore' 
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
+                : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+            }`}
+            onClick={() => setCurrentView('explore')}
+            title="Explore"
+            aria-label="Explore"
+          >
+            <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'explore' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium mt-0.5">Explore</span>
+            {currentView === 'explore' && (
+              <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
+            )}
+          </button>
+
+          {/* Create Post Button - Center */}
+          <button
+            className="group flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white shadow-2xl transform hover:scale-110 transition-all duration-300 ease-out focus:outline-none focus:ring-4 focus:ring-blue-500/30 -mt-8"
+            onClick={() => setShowCreatePostModal(true)}
+            title="Create Post"
+            aria-label="Create Post"
+          >
+            <div className="p-1 rounded-xl transition-all duration-300 group-hover:bg-white/20">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium mt-0.5">Create</span>
+          </button>
+
+          {/* Reels */}
+          <button
+            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              currentView === 'reels' 
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
+                : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+            }`}
+            onClick={() => setCurrentView('reels')}
+            title="Reels"
+            aria-label="Reels"
+          >
+            <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'reels' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium mt-0.5">Reels</span>
+            {currentView === 'reels' && (
+              <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
+            )}
+          </button>
+
+          {/* Messages */}
+          <button
+            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 relative ${
+              currentView === 'dm' 
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
+                : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+            }`}
+            onClick={() => setCurrentView('dm')}
+            title="Messages"
+            aria-label="Messages"
+          >
+            <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'dm' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium mt-0.5">Messages</span>
+            {currentView === 'dm' && (
+              <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
+            )}
+            {/* Unread messages indicator */}
+            {inbox.filter(chat => chat.unread > 0).length > 0 && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-white text-xs font-bold">
+                  {inbox.filter(chat => chat.unread > 0).length}
+                </span>
               </div>
-            ) : userProfile ? (
-              <>
-                <Profile
-                  userProfile={userProfile}
-                  userPosts={userPosts}
+            )}
+          </button>
+
+          {/* Profile */}
+          <button
+            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              currentView === 'profile' 
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
+                : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+            }`}
+            onClick={() => {
+              setCurrentView('profile');
+              if (user && user._id) {
+                setUserProfile(user);
+                fetchUserProfile(user._id);
+              }
+            }}
+            title="Profile"
+            aria-label="Profile"
+          >
+            <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'profile' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium mt-0.5">Profile</span>
+            {currentView === 'profile' && (
+              <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
+            )}
+          </button>
+        </div>
+      </nav>
+      {/* Mobile Header */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/20 shadow-sm">
+        <div className="flex items-center justify-between px-4 h-14">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+              <span className="text-white font-bold text-xs">C</span>
+            </div>
+            <div>
+              <span className="text-base font-semibold text-gray-900 dark:text-white">ConnectSphere</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              className="relative p-1.5 rounded-lg bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5m-10.5 6v-6.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V16.5m-6 0H7.5m6 0h-.375M21 10.5c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 6.285 6.285 0 01-1.5-.129l-.375-.125a21.498 21.498 0 01-2.625-.375 21.75 21.75 0 01-5.625-.75.75.75 0 01-.75-.75v-.75m12.75 0a21 21 0 00-1.5-.375c1.125-1.125 1.125-2.625 0-3.75a2.625 2.625 0 00-2.625-2.625H9.75a2.625 2.625 0 00-2.625 2.625c0 1.125 0 2.625 1.125 3.75H21z" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-sm">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className="p-1.5 rounded-lg bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+              title="Toggle dark mode"
+              aria-label="Toggle dark mode"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="md:ml-72 flex flex-1 flex-col items-center justify-start h-full min-h-screen py-8 px-4 transition-all duration-500 relative md:pt-8 pt-20">
+        <div className="w-full max-w-4xl mx-auto relative">
+          {/* Content Container with Glass Effect */}
+          <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 sm:p-8">
+            {/* Global VideoCall UI: shows for incoming calls anywhere in the app */}
+            {showVideoCall && globalIncomingCall && (
+              <VideoCall
+                show={showVideoCall}
+                onClose={() => setShowVideoCall(false)}
+                call={globalIncomingCall}
+                user={user}
+                activeChat={globalIncomingCall.callerUser}
+              />
+            )}
+            {/* Header Navigation */}
+            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg sticky top-0 z-40 rounded-2xl mb-6 sm:mb-8 border border-white/30 dark:border-gray-700/30">
+              <div className="flex items-center justify-between sm:justify-between px-4 sm:px-6 h-14 sm:h-16">
+                {/* Mobile header layout by page */}
+                {/* Feed: logo left, ConnectSphere center, avatar right */}
+                {currentView === 'feed' && (
+                  <>
+                    <div className="flex-1 flex items-center justify-start">
+                      <img
+                        src="/connectsphere-logo.png"
+                        alt="ConnectSphere Logo"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
+                    </div>
+                    <div className="flex-1 flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setShowCreatePostModal(true)}
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 focus:outline-none shadow-lg"
+                        title="Create Post"
+                        aria-label="Create Post"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                        {user?.username?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <button
+                        onClick={toggleDarkMode}
+                        aria-label="Toggle dark mode"
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none flex items-center justify-center"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+                {/* Explore: logo left, ConnectSphere center, dark mode right */}
+                {currentView === 'explore' && (
+                  <>
+                    <div className="flex-1 flex items-center justify-start">
+                      <img
+                        src="/connectsphere-logo.png"
+                        alt="ConnectSphere Logo"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
+                    </div>
+                    <div className="flex-1 flex items-center justify-end">
+                      <button
+                        onClick={toggleDarkMode}
+                        aria-label="Toggle dark mode"
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none flex items-center justify-center"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+                {/* Reels: logo left, ConnectSphere center, notification
+                 and avatar right */}
+                {currentView === 'reels' && (
+                  <>
+                    <div className="flex-1 flex items-center justify-start">
+                      <img
+                        src="/connectsphere-logo.png"
+                        alt="ConnectSphere Logo"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
+                    </div>
+                    <div className="flex-1 flex items-center justify-end gap-2">
+                      <button
+                        className="relative focus:outline-none group"
+                        title="Notifications"
+                        aria-label="Notifications"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="w-6 h-6 sm:w-7 sm:h-7 text-blue-500 dark:text-blue-400 group-hover:scale-110 transition-transform duration-200"
+                        >
+                          <path d="M18 16v-5a6 6 0 10-12 0v5a2 2 0 01-2 2h16a2 2 0 01-2-2z" />
+                          <path d="M13.73 21a2 2 0 01-3.46 0" />
+                        </svg>
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] flex items-center justify-center animate-bounce">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </button>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                        {user?.username?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <button
+                        onClick={toggleDarkMode}
+                        aria-label="Toggle dark mode"
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none flex items-center justify-center"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+                {/* Profile: logo left, ConnectSphere center, dark mode right */}
+                {currentView === 'profile' && (
+                  <>
+                    <div className="flex-1 flex items-center justify-start">
+                      <img
+                        src="/connectsphere-logo.png"
+                        alt="ConnectSphere Logo"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
+                    </div>
+                    <div className="flex-1 flex items-center justify-end">
+                      <button
+                        onClick={toggleDarkMode}
+                        aria-label="Toggle dark mode"
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none flex items-center justify-center"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+                {/* Desktop fallback for other pages */}
+                {!(currentView === 'feed' || currentView === 'explore' || currentView === 'reels' || currentView === 'profile') && (
+                  <>
+                    <div className="flex-1 flex items-center justify-start">
+                      <img
+                        src="/connectsphere-logo.png"
+                        alt="ConnectSphere Logo"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
+                      />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <span className="hidden sm:inline text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle ml-2">ConnectSphere</span>
+                    </div>
+                    <div className="flex-1 flex items-center justify-end gap-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                        {user?.username?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <button
+                        onClick={toggleDarkMode}
+                        aria-label="Toggle dark mode"
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none flex items-center justify-center"
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Main Content (Feed, Stories, etc.) */}
+            {currentView === 'dm' ? (
+              <div className="flex flex-1 h-[70vh] md:h-[80vh] min-h-[400px]">
+                <DM
+                  inbox={inbox}
+                  activeChat={activeChat}
+                  messages={messages}
+                  onSelectChat={userObj => setActiveChat(userObj)}
+                  onSendMessage={handleSendMessage}
+                  messageText={messageText}
+                  setMessageText={setMessageText}
                   user={user}
-                  editingProfile={editingProfile}
-                  editUsername={editUsername}
-                  editBio={editBio}
-                  editProfileImage={editProfileImage}
-                  editImageFile={editImageFile}
-                  editLoading={editLoading}
-                  editError={editError}
-                  setEditingProfile={setEditingProfile}
-                  setEditUsername={setEditUsername}
-                  setEditBio={setEditBio}
-                  setEditProfileImage={setEditProfileImage}
-                  setEditImageFile={setEditImageFile}
-                  handleEditProfile={async (e) => {
-                    e.preventDefault();
-                    setEditLoading(true);
-                    setEditError('');
-                    let imageUrl = editProfileImage;
-                    try {
-                      if (editImageFile) {
-                        const formData = new FormData();
-                        formData.append('image', editImageFile);
-                        const res = await fetch(`${API_URL}/upload`, {
-                          method: 'POST',
-                          headers: { Authorization: `Bearer ${token}` },
-                          body: formData,
+                  chatLoading={chatLoading}
+                  onNavigateToProfile={navigateToProfile}
+                  onStartCall={initiateCall}
+                  socket={socket.current}
+                />
+              </div>
+            ) : currentView === 'explore' ? (
+              <Explore
+                posts={explorePosts}
+                onPostClick={openPostModal}
+                onSearch={fetchExplorePosts}
+                searchUsers={searchUsers}
+                searchResults={searchResults}
+                showSearch={showSearch}
+                setShowSearch={setShowSearch}
+                navigateToProfile={navigateToProfile}
+              />
+            ) : currentView === 'profile' ? (
+              profileLoading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                  <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+                </div>
+              ) : userProfile ? (
+                <>
+                  <Profile
+                    userProfile={userProfile}
+                    userPosts={userPosts}
+                    user={user}
+                    editingProfile={editingProfile}
+                    editUsername={editUsername}
+                    editBio={editBio}
+                    editProfileImage={editProfileImage}
+                    editImageFile={editImageFile}
+                    editLoading={editLoading}
+                    editError={editError}
+                    setEditingProfile={setEditingProfile}
+                    setEditUsername={setEditUsername}
+                    setEditBio={setEditBio}
+                    setEditProfileImage={setEditProfileImage}
+                    setEditImageFile={setEditImageFile}
+                    handleEditProfile={async (e) => {
+                      e.preventDefault();
+                      setEditLoading(true);
+                      setEditError('');
+                      let imageUrl = editProfileImage;
+                      try {
+                        if (editImageFile) {
+                          const formData = new FormData();
+                          formData.append('image', editImageFile);
+                          const res = await fetch(`${API_URL}/upload`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${token}` },
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
+                          imageUrl = data.url;
+                        }
+                        const res = await fetch(`${API_URL}/users/me`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
                         });
-                        const data = await res.json();
-                        if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
-                        imageUrl = data.url;
+                        const updated = await res.json();
+                        if (!res.ok) throw new Error(updated.message || 'Profile update failed');
+                        setUserProfile(updated);
+                        setUser(updated);
+                        localStorage.setItem('user', JSON.stringify(updated));
+                        setEditingProfile(false);
+                      } catch (err) {
+                        setEditError(err.message || 'Failed to update profile');
+                        console.error('Profile update error:', err);
                       }
-                      const res = await fetch(`${API_URL}/users/me`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
-                      });
-                      const updated = await res.json();
-                      if (!res.ok) throw new Error(updated.message || 'Profile update failed');
-                      setUserProfile(updated);
-                      setUser(updated);
-                      localStorage.setItem('user', JSON.stringify(updated));
-                      setEditingProfile(false);
-                    } catch (err) {
-                      setEditError(err.message || 'Failed to update profile');
-                      console.error('Profile update error:', err);
-                    }
-                    setEditLoading(false);
-                  }}
-                  followUser={followUser}
-                  unfollowUser={unfollowUser}
-                  setCurrentView={setCurrentView}
-                  setActiveChat={setActiveChat}
-                  onPostClick={openPostModal}
-                />
-              </>
-            ) : null
-          ) : currentView === 'feed' ? (
-            <>
-              {/* Mobile: Feed with swipe handlers */}
-              <div className="block sm:hidden" style={{ touchAction: 'none' }} {...feedSwipeHandlers}>
-                <Feed
-                  posts={posts}
-                  user={user}
-                  comments={comments}
-                  showComments={showComments}
-                  commentText={commentText}
-                  onLike={handleLike}
-                  onCommentInput={handleCommentInput}
-                  onSubmitComment={handleSubmitComment}
-                  onDeleteComment={handleDeleteComment}
-                  onToggleComments={toggleComments}
-                  onNavigateToProfile={navigateToProfile}
-                  onPostClick={openPostModal}
-                  stories={stories}
-                  onStoryView={handleStoryView}
-                  onCreateStory={() => setShowCreateStoryModal(true)}
-                  onDeleteStory={handleDeleteStory}
-                />
+                      setEditLoading(false);
+                    }}
+                    followUser={followUser}
+                    unfollowUser={unfollowUser}
+                    setCurrentView={setCurrentView}
+                    setActiveChat={setActiveChat}
+                    onPostClick={openPostModal}
+                  />
+                </>
+              ) : null
+            ) : currentView === 'settings' ? (
+              <Settings
+                user={user}
+                onUpdateProfile={async (data) => {/* TODO: implement update logic */}}
+                onLogout={() => { localStorage.clear(); window.location.reload(); }}
+                onDeleteAccount={async () => {/* TODO: implement delete logic */}}
+                darkMode={darkMode}
+                setDarkMode={setDarkMode}
+                onBack={() => setCurrentView('profile')}
+              />
+            ) : currentView === 'feed' ? (
+              <Feed
+                posts={posts}
+                user={user}
+                comments={comments}
+                showComments={showComments}
+                commentText={commentText}
+                onLike={handleLike}
+                onCommentInput={handleCommentInput}
+                onSubmitComment={handleSubmitComment}
+                onDeleteComment={handleDeleteComment}
+                onToggleComments={toggleComments}
+                onNavigateToProfile={navigateToProfile}
+                onPostClick={openPostModal}
+                stories={stories}
+                onStoryView={handleStoryView}
+                onCreateStory={() => setShowCreateStoryModal(true)}
+                onDeleteStory={handleDeleteStory}
+              />
+            ) : currentView === 'reels' ? (
+              <Reels
+                reels={reels}
+                user={user}
+                onReelView={handleReelView}
+                onCreateReel={() => setShowCreateReelModal(true)}
+                onDeleteReel={handleDeleteReel}
+                onNavigateToProfile={navigateToProfile}
+              />
+            ) : null}
+            {showPostModal && selectedPost && (
+              <PostModal
+                post={selectedPost}
+                user={user}
+                comments={comments[selectedPost._id] || []}
+                onClose={closePostModal}
+                onLike={() => handleLike(selectedPost._id)}
+                onDeleteComment={handleDeleteComment}
+                commentText={commentText[selectedPost._id] || ''}
+                onCommentInput={handleCommentInput}
+                onSubmitComment={handleSubmitComment}
+              />
+            )}
+            {showCreateStoryModal && (
+              <CreateStoryModal
+                onClose={() => setShowCreateStoryModal(false)}
+                onCreate={async ({ mediaFile, mediaType }) => {
+                  const formData = new FormData();
+                  formData.append('media', mediaFile);
+                  formData.append('mediaType', mediaType);
+                  await handleCreateStory(formData);
+                }}
+                uploading={uploadingStory}
+                error={createStoryError}
+              />
+            )}
+            {callModal.show && (
+              <CallModal
+                show={callModal.show}
+                type={callModal.type}
+                localStream={localStream}
+                remoteStream={remoteStream}
+                onEnd={endCall}
+                onMute={muteCall}
+                muted={muted}
+                incoming={callModal.incoming}
+                onAccept={acceptCall}
+                onDecline={declineCall}
+                username={callModal.username}
+              />
+            )}
+
+            {showLiveCamera && liveStream && (
+              <div className="fixed inset-0 bg-black z-50 flex flex-col">
+                {/* Camera View */}
+                <div className="flex-1 relative">
+                  <video
+                    ref={(video) => {
+                      if (video) {
+                        video.srcObject = liveStream;
+                        video.play();
+                      }
+                    }}
+                    className="w-full h-full object-cover"
+                    autoPlay
+                    muted
+                    playsInline
+                  />
+                  
+                  {/* Camera Controls Overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
+                    <div className="flex items-center justify-center gap-6">
+                      {/* Close Button */}
+                      <button
+                        onClick={stopLiveStream}
+                        className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors duration-200"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                      
+                      {/* Capture Button */}
+                      <button
+                        onClick={captureLiveContent}
+                        className="w-16 h-16 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors duration-200"
+                      >
+                        <div className="w-12 h-12 bg-white rounded-full border-4 border-gray-300"></div>
+                      </button>
+                      
+                      {/* Switch Camera Button */}
+                      <button
+                        onClick={() => {
+                          // Switch between front and back camera
+                          stopLiveStream();
+                          if (liveType === 'post') {
+                            handleLivePost();
+                          } else {
+                            handleLiveReel();
+                          }
+                        }}
+                        className="w-12 h-12 bg-gray-800/50 rounded-full flex items-center justify-center text-white hover:bg-gray-700/50 transition-colors duration-200"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Live Indicator */}
+                  <div className="absolute top-6 left-6 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2">
+                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    LIVE
+                  </div>
+                  
+                  {/* Content Type Indicator */}
+                  <div className="absolute top-6 right-6 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+                    {liveType === 'post' ? 'POST' : 'REEL'}
+                  </div>
+                </div>
               </div>
-              {/* Desktop: Feed without swipe handlers */}
-              <div className="hidden sm:block">
-                <Feed
-                  posts={posts}
-                  user={user}
-                  comments={comments}
-                  showComments={showComments}
-                  commentText={commentText}
-                  onLike={handleLike}
-                  onCommentInput={handleCommentInput}
-                  onSubmitComment={handleSubmitComment}
-                  onDeleteComment={handleDeleteComment}
-                  onToggleComments={toggleComments}
-                  onNavigateToProfile={navigateToProfile}
-                  onPostClick={openPostModal}
-                  stories={stories}
-                  onStoryView={handleStoryView}
-                  onCreateStory={() => setShowCreateStoryModal(true)}
-                  onDeleteStory={handleDeleteStory}
-                />
-              </div>
-            </>
-          ) : currentView === 'reels' ? (
-            <Reels
-              reels={reels}
-              user={user}
-              onReelView={handleReelView}
-              onCreateReel={() => setShowCreateReelModal(true)}
-              onDeleteReel={handleDeleteReel}
-              onNavigateToProfile={navigateToProfile}
-            />
-          ) : null}
-          {showPostModal && selectedPost && (
-            <PostModal
-              post={selectedPost}
-              user={user}
-              comments={comments[selectedPost._id] || []}
-              onClose={closePostModal}
-              onLike={() => handleLike(selectedPost._id)}
-              onDeleteComment={handleDeleteComment}
-              commentText={commentText[selectedPost._id] || ''}
-              onCommentInput={handleCommentInput}
-              onSubmitComment={handleSubmitComment}
-            />
-          )}
-          {showCreateStoryModal && (
-            <CreateStoryModal
-              onClose={() => setShowCreateStoryModal(false)}
-              onCreate={async ({ mediaFile, mediaType }) => {
-                const formData = new FormData();
-                formData.append('media', mediaFile);
-                formData.append('mediaType', mediaType);
-                await handleCreateStory(formData);
-              }}
-              uploading={uploadingStory}
-              error={createStoryError}
-            />
-          )}
-          {callModal.show && (
-            <CallModal
-              show={callModal.show}
-              type={callModal.type}
-              localStream={localStream}
-              remoteStream={remoteStream}
-              onEnd={endCall}
-              onMute={muteCall}
-              muted={muted}
-              incoming={callModal.incoming}
-              onAccept={acceptCall}
-              onDecline={declineCall}
-              username={callModal.username}
-            />
-          )}
+            )}
+            {showCreatePostModal && (
+              <CreatePostModal
+                onClose={() => setShowCreatePostModal(false)}
+                onCreate={handleCreatePostModal}
+                uploading={uploadingPost}
+                error={createPostError}
+              />
+            )}
+          </div>
         </div>
       </main>
+      {showPostModal && selectedPost && (
+        <PostModal
+          post={selectedPost}
+          user={user}
+          comments={comments[selectedPost._id] || []}
+          onClose={closePostModal}
+          onLike={() => handleLike(selectedPost._id)}
+          onDeleteComment={handleDeleteComment}
+          commentText={commentText[selectedPost._id] || ''}
+          onCommentInput={handleCommentInput}
+          onSubmitComment={handleSubmitComment}
+        />
+      )}
     </div>
   );
 }
