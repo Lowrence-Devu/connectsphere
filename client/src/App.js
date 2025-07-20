@@ -1442,9 +1442,9 @@ function App() {
       });
       
       if (postsRes.ok) {
-      const postsData = await postsRes.json();
-      setUserPosts(postsData);
-    }
+        const postsData = await postsRes.json();
+        setUserPosts(postsData.posts || postsData); // Handle both new and old response format
+      }
       
     } catch (err) {
       console.error('Error fetching user profile:', err);

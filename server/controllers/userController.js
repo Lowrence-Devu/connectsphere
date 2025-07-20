@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Post = require('../models/Post');
 const notify = require('../utils/notify');
 
 // Get user profile by ID
@@ -151,6 +152,54 @@ exports.searchUsers = async (req, res) => {
       hasMore: skip + users.length < total
     });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+}; 
+
+// Delete a user by ID (admin only)
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+}; 
+
+// Get user posts by user ID
+exports.getUserPosts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Check if user exists
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Get posts by this user
+    const posts = await Post.find({ author: id })
+      .populate('author', 'username profileImage')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip);
+
+    // Get total count for pagination
+    const total = await Post.countDocuments({ author: id });
+
+    res.json({
+      posts,
+      total,
+      page,
+      limit,
+      hasMore: skip + posts.length < total
+    });
+  } catch (err) {
+    console.error('Error fetching user posts:', err);
     res.status(500).json({ message: err.message });
   }
 }; 
