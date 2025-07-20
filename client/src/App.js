@@ -2206,7 +2206,7 @@ function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="md:ml-72 flex flex-1 flex-col items-center justify-start h-full min-h-screen py-8 px-4 transition-all duration-500 relative md:pt-8 pt-20">
+      <main className="md:ml-72 flex flex-1 flex-col items-center justify-start h-full min-h-screen py-8 px-4 transition-all duration-500 relative md:pt-8 pt-20 pb-24 md:pb-8">
         <div className="w-full max-w-4xl mx-auto relative">
           {/* Content Container with Glass Effect */}
           <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 sm:p-8">
