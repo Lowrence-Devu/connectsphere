@@ -11,6 +11,7 @@ import Explore from './components/Explore';
 import DM from './components/DM';
 import VideoCall from './components/VideoCall';
 import SplashScreen from './components/SplashScreen';
+import Login from './components/Login';
 import './components/SplashScreen.css';
 import Peer from 'simple-peer';
 import CallModal from './components/CallModal';
@@ -306,9 +307,7 @@ function App() {
   useEffect(() => {
     fetchPosts();
     if (token) {
-      // Check for users and create test users if needed
-      checkAndCreateTestUsers();
-      
+      console.log('[App] Token found, initializing socket connection...');
       // Enhanced Socket.IO connection with better error handling
       const getSocketUrl = () => {
         const apiUrl = process.env.REACT_APP_API_URL;
@@ -334,6 +333,14 @@ function App() {
       
       const connectSocket = () => {
         try {
+          // Disconnect existing socket if any
+          if (socket.current) {
+            socket.current.disconnect();
+            socket.current = null;
+          }
+          
+          console.log('[App] Connecting to socket at:', getSocketUrl());
+          
           socket.current = io(getSocketUrl(), {
             transports: ['websocket', 'polling'],
             timeout: 20000,
@@ -341,25 +348,31 @@ function App() {
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000
+            reconnectionDelayMax: 5000,
+            withCredentials: true
           });
-          
-          socket.current.on('connect', () => {
-            console.log('[App] Connected to server successfully');
-            window.socketConnected = true;
-            if (user?._id) {
-              socket.current.emit('join', user._id);
-            }
-          });
-          
-          socket.current.on('connect_error', (error) => {
-            console.error('[App] Socket connection error:', error);
-            window.socketConnected = false;
-          });
-          
-          socket.current.on('disconnect', (reason) => {
-            console.log('[App] Socket disconnected:', reason);
-            window.socketConnected = false;
+      
+      socket.current.on('connect', () => {
+        console.log('[App] Connected to server successfully');
+        window.socketConnected = true;
+        if (user?._id) {
+          socket.current.emit('join', user._id);
+        }
+      });
+      
+      socket.current.on('connect_error', (error) => {
+        console.error('[App] Socket connection error:', error);
+        console.error('[App] Error details:', {
+          message: error.message,
+          type: error.type,
+          description: error.description
+        });
+        window.socketConnected = false;
+      });
+      
+      socket.current.on('disconnect', (reason) => {
+        console.log('[App] Socket disconnected:', reason);
+        window.socketConnected = false;
             
             // Attempt to reconnect if not manually disconnected
             if (reason !== 'io client disconnect') {
@@ -387,43 +400,49 @@ function App() {
           socket.current.on('reconnect_failed', () => {
             console.error('[App] Reconnection failed');
             window.socketConnected = false;
-          });
-          
-          socket.current.on('newPost', (post) => {
+      });
+      
+      socket.current.on('newPost', (post) => {
             console.log('[App] New post received:', post);
-            setPosts(prev => [post, ...prev]);
-          });
-          
-          socket.current.on('postLiked', (data) => {
+        setPosts(prev => [post, ...prev]);
+      });
+      
+      socket.current.on('postLiked', (data) => {
             console.log('[App] Post liked:', data);
-            setPosts(prev => prev.map(post => 
-              post._id === data.postId 
-                ? { ...post, likes: data.likes }
-                : post
-            ));
-          });
-          
-          socket.current.on('newComment', (data) => {
+        setPosts(prev => prev.map(post => 
+          post._id === data.postId 
+            ? { ...post, likes: data.likes }
+            : post
+        ));
+      });
+      
+      socket.current.on('newComment', (data) => {
             console.log('[App] New comment received:', data);
-            setComments(prev => ({
-              ...prev,
-              [data.postId]: [...(prev[data.postId] || []), data.comment]
-            }));
-          });
+        setComments(prev => ({
+          ...prev,
+          [data.postId]: [...(prev[data.postId] || []), data.comment]
+        }));
+      });
 
-          // Listen for real-time notifications
-          socket.current.on('notification', (notif) => {
+      // Listen for real-time notifications
+      socket.current.on('notification', (notif) => {
             console.log('[App] New notification received:', notif);
-            setNotifications(prev => [notif, ...prev]);
-            setUnreadCount(prev => prev + 1);
-          });
+        setNotifications(prev => [notif, ...prev]);
+        setUnreadCount(prev => prev + 1);
+      });
           
         } catch (error) {
           console.error('[App] Socket initialization error:', error);
         }
       };
       
-      connectSocket();
+      // Only connect if user is authenticated
+      if (user?._id) {
+        console.log('[App] User authenticated, connecting socket...');
+        connectSocket();
+      } else {
+        console.log('[App] User not authenticated yet, skipping socket connection');
+      }
       
       return () => {
         if (socket.current) {
@@ -651,21 +670,21 @@ function App() {
     try {
       // Optimistic update - add comment immediately
       const optimisticComment = {
-        _id: `temp-${Date.now()}`,
+      _id: `temp-${Date.now()}`,
         text: commentText,
-        author: user,
+      author: user,
         postId: postId,
-        createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
         isOptimistic: true
-      };
+    };
       
-      setComments(prev => ({
-        ...prev,
+    setComments(prev => ({
+      ...prev,
         [postId]: [...(prev[postId] || []), optimisticComment]
-      }));
+    }));
       
       // Clear input immediately
-      setCommentText(prev => ({ ...prev, [postId]: '' }));
+    setCommentText(prev => ({ ...prev, [postId]: '' }));
       
       // Make API call
       const res = await fetch(`${API_URL}/posts/${postId}/comments`, {
@@ -713,16 +732,16 @@ function App() {
   const handleLike = async (postId) => {
     try {
       // Optimistic update - update UI immediately
-      setPosts(prev => prev.map(post => {
-        if (post._id === postId) {
+    setPosts(prev => prev.map(post => {
+      if (post._id === postId) {
           const isLiked = post.likes?.includes(user?._id);
           const newLikes = isLiked 
             ? post.likes.filter(id => id !== user?._id)
             : [...(post.likes || []), user?._id];
           return { ...post, likes: newLikes };
-        }
-        return post;
-      }));
+      }
+      return post;
+    }));
       
       // Make API call
       const res = await fetch(`${API_URL}/posts/${postId}/like`, {
@@ -1342,7 +1361,7 @@ function App() {
               isNoResults: true 
             }]);
           }
-        } catch (err) {
+    } catch (err) {
           setSearchResults([{ 
             _id: 'no-results', 
             username: 'No users found', 
@@ -1363,7 +1382,7 @@ function App() {
       
       setSearchResults([]);
     } finally {
-      setSearching(false);
+    setSearching(false);
     }
   };
 
@@ -1423,57 +1442,15 @@ function App() {
       });
       
       if (postsRes.ok) {
-        const postsData = await postsRes.json();
-        setUserPosts(postsData);
-      }
+      const postsData = await postsRes.json();
+      setUserPosts(postsData);
+    }
       
     } catch (err) {
       console.error('Error fetching user profile:', err);
       setError('Failed to load user profile. Please try again.');
     } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  // Test function to check if users exist and create some if needed
-  const checkAndCreateTestUsers = async () => {
-    try {
-      console.log('Checking for existing users...');
-      const res = await fetch(`${API_URL}/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (res.ok) {
-        const users = await res.json();
-        console.log('Current users in system:', users.length);
-        
-        // If no users exist, create some test users
-        if (users.length === 0) {
-          console.log('No users found, creating test users...');
-          const testUsers = [
-            { username: 'john_doe', email: 'john@test.com', password: 'password123' },
-            { username: 'jane_smith', email: 'jane@test.com', password: 'password123' },
-            { username: 'mike_wilson', email: 'mike@test.com', password: 'password123' },
-            { username: 'sarah_jones', email: 'sarah@test.com', password: 'password123' },
-            { username: 'david_brown', email: 'david@test.com', password: 'password123' }
-          ];
-          
-          for (const testUser of testUsers) {
-            try {
-              await fetch(`${API_URL}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(testUser)
-              });
-              console.log('Created test user:', testUser.username);
-            } catch (err) {
-              console.log('Failed to create test user:', testUser.username, err);
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error checking users:', err);
+    setProfileLoading(false);
     }
   };
 
@@ -1487,14 +1464,14 @@ function App() {
     }
     
     try {
-      setProfileLoading(true);
-      setShowSearch(false);
-      setSearchQuery('');
-      setSearchResults([]);
+    setProfileLoading(true);
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
       setGlobalError(''); // Clear any previous errors
       
       // Optimistic UI update
-      setCurrentView('profile');
+    setCurrentView('profile');
       console.log('Set current view to profile');
       
       await fetchUserProfile(user._id);
@@ -1743,8 +1720,63 @@ function App() {
 
 
 
+  // Authentication functions
+  const handleLogin = async (email, password) => {
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Login failed');
+      
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+    } catch (err) {
+      throw new Error(err.message || 'Login failed');
+    }
+  };
+
+  const handleRegister = async (username, email, password) => {
+    try {
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Registration failed');
+      
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+    } catch (err) {
+      throw new Error(err.message || 'Registration failed');
+    }
+  };
+
+  // Check if user is authenticated
+  const isAuthenticated = user && token;
+
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <Login 
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onGoogleLogin={() => window.location.href = `${API_URL}/auth/google`}
+      />
+    );
   }
 
   return (
@@ -1818,7 +1850,7 @@ function App() {
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl transform hover:scale-105 transition-all duration-300">
               <span className="text-white font-bold text-xl">C</span>
-            </div>
+        </div>
             <div>
               <span className="text-2xl font-bold text-white tracking-tight bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent">ConnectSphere</span>
               <p className="text-xs text-gray-400 mt-1">Social Network</p>
@@ -1826,94 +1858,94 @@ function App() {
           </div>
         </div>
         <div className="flex-1 w-full space-y-3 px-4">
-          <button
+        <button
             className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'feed' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
-            onClick={() => setCurrentView('feed')}
-            title="Feed"
-            aria-label="Feed"
-          >
+          onClick={() => setCurrentView('feed')}
+          title="Feed"
+          aria-label="Feed"
+        >
             <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'feed' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
+          </svg>
             </div>
             <span className="text-lg ml-4">Feed</span>
             {currentView === 'feed' && (
               <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             )}
-          </button>
-          <button
+        </button>
+        <button
             className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'explore' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
-            onClick={() => setCurrentView('explore')}
-            title="Explore"
-            aria-label="Explore"
-          >
+          onClick={() => setCurrentView('explore')}
+          title="Explore"
+          aria-label="Explore"
+        >
             <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'explore' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+          </svg>
             </div>
             <span className="text-lg ml-4">Explore</span>
             {currentView === 'explore' && (
               <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             )}
-          </button>
-          <button
+        </button>
+        <button
             className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'reels' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
-            onClick={() => setCurrentView('reels')}
-            title="Reels"
-            aria-label="Reels"
-          >
+          onClick={() => setCurrentView('reels')}
+          title="Reels"
+          aria-label="Reels"
+        >
             <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'reels' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
+          </svg>
             </div>
             <span className="text-lg ml-4">Reels</span>
             {currentView === 'reels' && (
               <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             )}
-          </button>
-          <button
+        </button>
+        <button
             className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'dm' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
-            onClick={() => setCurrentView('dm')}
-            title="Messages"
-            aria-label="Messages"
-          >
+          onClick={() => setCurrentView('dm')}
+          title="Messages"
+          aria-label="Messages"
+        >
             <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'dm' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
+          </svg>
             </div>
             <span className="text-lg ml-4">Messages</span>
             {currentView === 'dm' && (
               <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             )}
-          </button>
-          <button
+        </button>
+        <button
             className={`group flex items-center w-full px-4 py-4 rounded-2xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:scale-[1.02] ${currentView === 'profile' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 font-semibold shadow-xl border border-blue-500/30 shadow-blue-500/20' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
-            onClick={() => {
-              setCurrentView('profile');
-              if (user && user._id) {
-                setUserProfile(user);
-                fetchUserProfile(user._id);
-              }
-            }}
-            title="Profile"
-            aria-label="Profile"
-          >
+          onClick={() => {
+            setCurrentView('profile');
+            if (user && user._id) {
+              setUserProfile(user);
+              fetchUserProfile(user._id);
+            }
+          }}
+          title="Profile"
+          aria-label="Profile"
+        >
             <div className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'profile' ? 'bg-blue-500/30' : 'group-hover:bg-white/10'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
+          </svg>
             </div>
             <span className="text-lg ml-4">Profile</span>
             {currentView === 'profile' && (
               <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             )}
-          </button>
+        </button>
         </div>
-        <div className="px-8 w-full">
+        <div className="px-8 w-full space-y-3">
           <div className="bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-xl">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-2xl transform hover:scale-105 transition-all duration-300">
@@ -1921,7 +1953,7 @@ function App() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-semibold text-sm truncate">{user?.username || 'User'}</p>
-                <p className="text-gray-400 text-xs truncate">{user?.email || 'user@example.com'}</p>
+                <p className="text-gray-400 text-xs truncate">{user?.email || 'Not logged in'}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                   <span className="text-xs text-green-400">Online</span>
@@ -1929,58 +1961,120 @@ function App() {
               </div>
             </div>
           </div>
+          
+          {/* Logout Button */}
+          <button
+            onClick={() => {
+              console.log('🔄 Logging out...');
+              
+              // Clear all storage
+              localStorage.clear();
+              sessionStorage.clear();
+              
+              // Clear cookies
+              document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+              });
+              
+              // Clear cache storage
+              if ('caches' in window) {
+                caches.keys().then(names => {
+                  names.forEach(name => {
+                    caches.delete(name);
+                    console.log('🗑️ Cache deleted:', name);
+                  });
+                });
+              }
+              
+              // Clear IndexedDB
+              if ('indexedDB' in window) {
+                indexedDB.databases().then(databases => {
+                  databases.forEach(db => {
+                    indexedDB.deleteDatabase(db.name);
+                    console.log('🗑️ IndexedDB deleted:', db.name);
+                  });
+                });
+              }
+              
+              // Disconnect socket
+              if (socket.current) {
+                socket.current.disconnect();
+                console.log('🔌 Socket disconnected');
+              }
+              
+              // Reset app state to show splash screen
+              setUser(null);
+              setToken('');
+              setShowSplash(true);
+              setCurrentView('feed');
+              
+              console.log('✅ All data cleared, reloading...');
+              
+              // Force reload after a short delay to ensure everything is cleared
+              setTimeout(() => {
+                window.location.href = window.location.origin;
+              }, 100);
+            }}
+            className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50 shadow-xl"
+            title="Logout"
+          >
+            <div className="flex items-center justify-center gap-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Logout</span>
+            </div>
+          </button>
         </div>
       </nav>
       {/* Enhanced Bottom Nav Bar: Mobile only */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 w-full z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-white/10 dark:border-gray-700/10 shadow-xl">
-        <div className="flex justify-around items-center h-18 px-3 py-2">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-t border-white/20 dark:border-gray-700/20 shadow-lg h-20 md:hidden">
+        <div className="flex justify-evenly items-center w-full h-full">
+          {/* For each nav button, add 'flex-1 mx-1' to the button className */}
           {/* Feed */}
-          <button
-            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          <button className={`flex-1 mx-1 group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               currentView === 'feed' 
                 ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
                 : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
             }`}
-            onClick={() => setCurrentView('feed')}
-            title="Feed"
-            aria-label="Feed"
-          >
+          onClick={() => setCurrentView('feed')}
+          title="Feed"
+          aria-label="Feed"
+        >
             <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'feed' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 4.5l9 5.25M4.5 10.5v7.125A2.625 2.625 0 007.125 20.25h9.75A2.625 2.625 0 0019.5 17.625V10.5M8.25 20.25v-6h7.5v6" />
+          </svg>
             </div>
             <span className="text-xs font-medium mt-0.5">Feed</span>
             {currentView === 'feed' && (
               <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
             )}
-          </button>
+        </button>
 
           {/* Explore */}
-          <button
-            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          <button className={`flex-1 mx-1 group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               currentView === 'explore' 
                 ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
                 : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
             }`}
-            onClick={() => setCurrentView('explore')}
-            title="Explore"
-            aria-label="Explore"
-          >
+          onClick={() => setCurrentView('explore')}
+          title="Explore"
+          aria-label="Explore"
+        >
             <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'explore' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+          </svg>
             </div>
             <span className="text-xs font-medium mt-0.5">Explore</span>
             {currentView === 'explore' && (
               <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
             )}
-          </button>
+        </button>
 
-          {/* Create Post Button - Center */}
-          <button
-            className="group flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white shadow-2xl transform hover:scale-110 transition-all duration-300 ease-out focus:outline-none focus:ring-4 focus:ring-blue-500/30 -mt-8"
+          {/* Create (center) */}
+          <button className="flex-1 mx-1 group flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white shadow-2xl transform hover:scale-110 transition-all duration-300 ease-out focus:outline-none focus:ring-4 focus:ring-blue-500/30 -mt-8"
             onClick={() => setShowCreatePostModal(true)}
             title="Create Post"
             aria-label="Create Post"
@@ -1994,42 +2088,40 @@ function App() {
           </button>
 
           {/* Reels */}
-          <button
-            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          <button className={`flex-1 mx-1 group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               currentView === 'reels' 
                 ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
                 : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
             }`}
-            onClick={() => setCurrentView('reels')}
-            title="Reels"
-            aria-label="Reels"
-          >
+          onClick={() => setCurrentView('reels')}
+          title="Reels"
+          aria-label="Reels"
+        >
             <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'reels' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-3A2.25 2.25 0 008.25 5.25V9m7.5 0v10.5A2.25 2.25 0 0113.5 21h-3A2.25 2.25 0 018.25 19.5V9m7.5 0H8.25m7.5 0H19.5A2.25 2.25 0 0121.75 11.25v7.5A2.25 2.25 0 0119.5 21.75H4.5A2.25 2.25 0 012.25 18.75v-7.5A2.25 2.25 0 014.5 9h3.75" />
+          </svg>
             </div>
             <span className="text-xs font-medium mt-0.5">Reels</span>
             {currentView === 'reels' && (
               <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
             )}
-          </button>
+        </button>
 
           {/* Messages */}
-          <button
-            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 relative ${
+          <button className={`flex-1 mx-1 group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 relative ${
               currentView === 'dm' 
                 ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
                 : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
             }`}
-            onClick={() => setCurrentView('dm')}
-            title="Messages"
-            aria-label="Messages"
-          >
+          onClick={() => setCurrentView('dm')}
+          title="Messages"
+          aria-label="Messages"
+        >
             <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'dm' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5H4.5A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15A2.25 2.25 0 0121.75 6.75z" />
+          </svg>
             </div>
             <span className="text-xs font-medium mt-0.5">Messages</span>
             {currentView === 'dm' && (
@@ -2043,35 +2135,34 @@ function App() {
                 </span>
               </div>
             )}
-          </button>
+        </button>
 
           {/* Profile */}
-          <button
-            className={`group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          <button className={`flex-1 mx-1 group flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               currentView === 'profile' 
                 ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 dark:text-blue-400 scale-110 shadow-lg' 
                 : 'text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
             }`}
-            onClick={() => {
-              setCurrentView('profile');
-              if (user && user._id) {
-                setUserProfile(user);
-                fetchUserProfile(user._id);
-              }
-            }}
-            title="Profile"
-            aria-label="Profile"
-          >
+          onClick={() => {
+            setCurrentView('profile');
+            if (user && user._id) {
+              setUserProfile(user);
+              fetchUserProfile(user._id);
+            }
+          }}
+          title="Profile"
+          aria-label="Profile"
+        >
             <div className={`p-1 rounded-xl transition-all duration-300 ${currentView === 'profile' ? 'bg-blue-500/30' : 'group-hover:bg-blue-500/15'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
-              </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0v.75A2.25 2.25 0 0117.25 22.5h-10.5A2.25 2.25 0 014.5 20.25V19.5z" />
+          </svg>
             </div>
             <span className="text-xs font-medium mt-0.5">Profile</span>
             {currentView === 'profile' && (
               <div className="absolute -top-1 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-lg"></div>
             )}
-          </button>
+        </button>
         </div>
       </nav>
       {/* Mobile Header */}
@@ -2119,17 +2210,17 @@ function App() {
         <div className="w-full max-w-4xl mx-auto relative">
           {/* Content Container with Glass Effect */}
           <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 sm:p-8">
-            {/* Global VideoCall UI: shows for incoming calls anywhere in the app */}
-            {showVideoCall && globalIncomingCall && (
-              <VideoCall
-                show={showVideoCall}
-                onClose={() => setShowVideoCall(false)}
-                call={globalIncomingCall}
-                user={user}
-                activeChat={globalIncomingCall.callerUser}
-              />
-            )}
-            {/* Header Navigation */}
+          {/* Global VideoCall UI: shows for incoming calls anywhere in the app */}
+          {showVideoCall && globalIncomingCall && (
+            <VideoCall
+              show={showVideoCall}
+              onClose={() => setShowVideoCall(false)}
+              call={globalIncomingCall}
+              user={user}
+              activeChat={globalIncomingCall.callerUser}
+            />
+          )}
+          {/* Header Navigation */}
             <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg sticky top-0 z-40 rounded-2xl mb-6 sm:mb-8 border border-white/30 dark:border-gray-700/30">
               <div className="flex items-center justify-between sm:justify-between px-4 sm:px-6 h-14 sm:h-16">
                 {/* Mobile header layout by page */}
@@ -2137,26 +2228,26 @@ function App() {
                 {currentView === 'feed' && (
                   <>
                     <div className="flex-1 flex items-center justify-start">
-                      <img
-                        src="/connectsphere-logo.png"
-                        alt="ConnectSphere Logo"
+                <img
+                  src="/connectsphere-logo.png"
+                  alt="ConnectSphere Logo"
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
-                      />
-                    </div>
+                />
+              </div>
                     <div className="flex-1 flex items-center justify-center">
                       <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
                     </div>
                     <div className="flex-1 flex items-center justify-end gap-2">
-                      <button
+                  <button
                         onClick={() => setShowCreatePostModal(true)}
-                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 focus:outline-none shadow-lg"
+                        className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 focus:outline-none shadow-lg hidden md:flex"
                         title="Create Post"
                         aria-label="Create Post"
                       >
                         <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                      </button>
+                  </button>
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                         {user?.username?.[0]?.toUpperCase() || 'U'}
                       </div>
@@ -2208,7 +2299,7 @@ function App() {
                         alt="ConnectSphere Logo"
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-sm inline-block align-middle"
                       />
-                    </div>
+                  </div>
                     <div className="flex-1 flex items-center justify-center">
                       <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle">ConnectSphere</span>
                     </div>
@@ -2236,13 +2327,13 @@ function App() {
                             {unreadCount > 99 ? '99+' : unreadCount}
                           </span>
                         )}
-                      </button>
+                </button>
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                         {user?.username?.[0]?.toUpperCase() || 'U'}
                       </div>
-                      <button
-                        onClick={toggleDarkMode}
-                        aria-label="Toggle dark mode"
+                <button
+                  onClick={toggleDarkMode}
+                  aria-label="Toggle dark mode"
                         className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-700 rounded-full transition-colors duration-300 focus:outline-none flex items-center justify-center"
                       >
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
@@ -2274,7 +2365,7 @@ function App() {
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
                         </svg>
-                      </button>
+                </button>
                     </div>
                   </>
                 )}
@@ -2292,9 +2383,9 @@ function App() {
                       <span className="hidden sm:inline text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent align-middle ml-2">ConnectSphere</span>
                     </div>
                     <div className="flex-1 flex items-center justify-end gap-2">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                        {user?.username?.[0]?.toUpperCase() || 'U'}
-                      </div>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
+                </div>
                       <button
                         onClick={toggleDarkMode}
                         aria-label="Toggle dark mode"
@@ -2304,187 +2395,237 @@ function App() {
                           <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
                         </svg>
                       </button>
-                    </div>
+              </div>
                   </>
                 )}
-              </div>
             </div>
-            {/* Main Content (Feed, Stories, etc.) */}
-            {currentView === 'dm' ? (
+          </div>
+          {/* Main Content (Feed, Stories, etc.) */}
+          {currentView === 'dm' ? (
               <div className="flex flex-1 h-[70vh] md:h-[80vh] min-h-[400px]">
-                <DM
-                  inbox={inbox}
-                  activeChat={activeChat}
-                  messages={messages}
-                  onSelectChat={userObj => setActiveChat(userObj)}
-                  onSendMessage={handleSendMessage}
-                  messageText={messageText}
-                  setMessageText={setMessageText}
-                  user={user}
-                  chatLoading={chatLoading}
-                  onNavigateToProfile={navigateToProfile}
-                  onStartCall={initiateCall}
-                  socket={socket.current}
-                />
+            <DM
+              inbox={inbox}
+              activeChat={activeChat}
+              messages={messages}
+              onSelectChat={userObj => setActiveChat(userObj)}
+              onSendMessage={handleSendMessage}
+              messageText={messageText}
+              setMessageText={setMessageText}
+              user={user}
+              chatLoading={chatLoading}
+              onNavigateToProfile={navigateToProfile}
+              onStartCall={initiateCall}
+              socket={socket.current}
+            />
               </div>
-            ) : currentView === 'explore' ? (
-              <Explore
-                posts={explorePosts}
-                onPostClick={openPostModal}
-                onSearch={fetchExplorePosts}
+          ) : currentView === 'explore' ? (
+            <Explore
+              posts={explorePosts}
+              onPostClick={openPostModal}
+              onSearch={fetchExplorePosts}
                 searchUsers={searchUsers}
                 searchResults={searchResults}
                 showSearch={showSearch}
                 setShowSearch={setShowSearch}
                 navigateToProfile={navigateToProfile}
-              />
-            ) : currentView === 'profile' ? (
-              profileLoading ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                  <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
-                </div>
-              ) : userProfile ? (
-                <>
-                  <Profile
-                    userProfile={userProfile}
-                    userPosts={userPosts}
-                    user={user}
-                    editingProfile={editingProfile}
-                    editUsername={editUsername}
-                    editBio={editBio}
-                    editProfileImage={editProfileImage}
-                    editImageFile={editImageFile}
-                    editLoading={editLoading}
-                    editError={editError}
-                    setEditingProfile={setEditingProfile}
-                    setEditUsername={setEditUsername}
-                    setEditBio={setEditBio}
-                    setEditProfileImage={setEditProfileImage}
-                    setEditImageFile={setEditImageFile}
-                    handleEditProfile={async (e) => {
-                      e.preventDefault();
-                      setEditLoading(true);
-                      setEditError('');
-                      let imageUrl = editProfileImage;
-                      try {
-                        if (editImageFile) {
-                          const formData = new FormData();
-                          formData.append('image', editImageFile);
-                          const res = await fetch(`${API_URL}/upload`, {
-                            method: 'POST',
-                            headers: { Authorization: `Bearer ${token}` },
-                            body: formData,
-                          });
-                          const data = await res.json();
-                          if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
-                          imageUrl = data.url;
-                        }
-                        const res = await fetch(`${API_URL}/users/me`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
+            />
+          ) : currentView === 'profile' ? (
+            profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <div className="text-lg text-gray-600 dark:text-gray-300">Loading profile...</div>
+              </div>
+            ) : userProfile ? (
+              <>
+                <Profile
+                  userProfile={userProfile}
+                  userPosts={userPosts}
+                  user={user}
+                  editingProfile={editingProfile}
+                  editUsername={editUsername}
+                  editBio={editBio}
+                  editProfileImage={editProfileImage}
+                  editImageFile={editImageFile}
+                  editLoading={editLoading}
+                  editError={editError}
+                  setEditingProfile={setEditingProfile}
+                  setEditUsername={setEditUsername}
+                  setEditBio={setEditBio}
+                  setEditProfileImage={setEditProfileImage}
+                  setEditImageFile={setEditImageFile}
+                  handleEditProfile={async (e) => {
+                    e.preventDefault();
+                    setEditLoading(true);
+                    setEditError('');
+                    let imageUrl = editProfileImage;
+                    try {
+                      if (editImageFile) {
+                        const formData = new FormData();
+                        formData.append('image', editImageFile);
+                        const res = await fetch(`${API_URL}/upload`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                          body: formData,
                         });
-                        const updated = await res.json();
-                        if (!res.ok) throw new Error(updated.message || 'Profile update failed');
-                        setUserProfile(updated);
-                        setUser(updated);
-                        localStorage.setItem('user', JSON.stringify(updated));
-                        setEditingProfile(false);
-                      } catch (err) {
-                        setEditError(err.message || 'Failed to update profile');
-                        console.error('Profile update error:', err);
+                        const data = await res.json();
+                        if (!res.ok || !data.url) throw new Error(data.message || 'Image upload failed');
+                        imageUrl = data.url;
                       }
-                      setEditLoading(false);
-                    }}
-                    followUser={followUser}
-                    unfollowUser={unfollowUser}
-                    setCurrentView={setCurrentView}
-                    setActiveChat={setActiveChat}
-                    onPostClick={openPostModal}
-                  />
-                </>
-              ) : null
+                      const res = await fetch(`${API_URL}/users/me`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ username: editUsername, bio: editBio, profileImage: imageUrl })
+                      });
+                      const updated = await res.json();
+                      if (!res.ok) throw new Error(updated.message || 'Profile update failed');
+                      setUserProfile(updated);
+                      setUser(updated);
+                      localStorage.setItem('user', JSON.stringify(updated));
+                      setEditingProfile(false);
+                    } catch (err) {
+                      setEditError(err.message || 'Failed to update profile');
+                      console.error('Profile update error:', err);
+                    }
+                    setEditLoading(false);
+                  }}
+                  followUser={followUser}
+                  unfollowUser={unfollowUser}
+                  setCurrentView={setCurrentView}
+                  setActiveChat={setActiveChat}
+                  onPostClick={openPostModal}
+                />
+              </>
+            ) : null
             ) : currentView === 'settings' ? (
               <Settings
                 user={user}
                 onUpdateProfile={async (data) => {/* TODO: implement update logic */}}
-                onLogout={() => { localStorage.clear(); window.location.reload(); }}
+                onLogout={() => {
+                  console.log('🔄 Logging out from Settings...');
+                  
+                  // Clear all storage
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  
+                  // Clear cookies
+                  document.cookie.split(";").forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                  });
+                  
+                  // Clear cache storage
+                  if ('caches' in window) {
+                    caches.keys().then(names => {
+                      names.forEach(name => {
+                        caches.delete(name);
+                        console.log('🗑️ Cache deleted:', name);
+                      });
+                    });
+                  }
+                  
+                  // Clear IndexedDB
+                  if ('indexedDB' in window) {
+                    indexedDB.databases().then(databases => {
+                      databases.forEach(db => {
+                        indexedDB.deleteDatabase(db.name);
+                        console.log('🗑️ IndexedDB deleted:', db.name);
+                      });
+                    });
+                  }
+                  
+                  // Disconnect socket
+                  if (socket.current) {
+                    socket.current.disconnect();
+                    console.log('🔌 Socket disconnected');
+                  }
+                  
+                  console.log('✅ All data cleared, reloading...');
+                  
+                  // Reset app state to show splash screen
+                  setUser(null);
+                  setToken('');
+                  setShowSplash(true);
+                  setCurrentView('feed');
+                  
+                  // Force reload after a short delay to ensure everything is cleared
+                  setTimeout(() => {
+                    window.location.href = window.location.origin;
+                  }, 100);
+                }}
                 onDeleteAccount={async () => {/* TODO: implement delete logic */}}
                 darkMode={darkMode}
                 setDarkMode={setDarkMode}
                 onBack={() => setCurrentView('profile')}
               />
-            ) : currentView === 'feed' ? (
-              <Feed
-                posts={posts}
-                user={user}
-                comments={comments}
-                showComments={showComments}
-                commentText={commentText}
-                onLike={handleLike}
-                onCommentInput={handleCommentInput}
-                onSubmitComment={handleSubmitComment}
-                onDeleteComment={handleDeleteComment}
-                onToggleComments={toggleComments}
-                onNavigateToProfile={navigateToProfile}
-                onPostClick={openPostModal}
-                stories={stories}
-                onStoryView={handleStoryView}
-                onCreateStory={() => setShowCreateStoryModal(true)}
-                onDeleteStory={handleDeleteStory}
-              />
-            ) : currentView === 'reels' ? (
-              <Reels
-                reels={reels}
-                user={user}
-                onReelView={handleReelView}
-                onCreateReel={() => setShowCreateReelModal(true)}
-                onDeleteReel={handleDeleteReel}
-                onNavigateToProfile={navigateToProfile}
-              />
-            ) : null}
-            {showPostModal && selectedPost && (
-              <PostModal
-                post={selectedPost}
-                user={user}
-                comments={comments[selectedPost._id] || []}
-                onClose={closePostModal}
-                onLike={() => handleLike(selectedPost._id)}
-                onDeleteComment={handleDeleteComment}
-                commentText={commentText[selectedPost._id] || ''}
-                onCommentInput={handleCommentInput}
-                onSubmitComment={handleSubmitComment}
-              />
-            )}
-            {showCreateStoryModal && (
-              <CreateStoryModal
-                onClose={() => setShowCreateStoryModal(false)}
-                onCreate={async ({ mediaFile, mediaType }) => {
-                  const formData = new FormData();
-                  formData.append('media', mediaFile);
-                  formData.append('mediaType', mediaType);
-                  await handleCreateStory(formData);
-                }}
-                uploading={uploadingStory}
-                error={createStoryError}
-              />
-            )}
-            {callModal.show && (
-              <CallModal
-                show={callModal.show}
-                type={callModal.type}
-                localStream={localStream}
-                remoteStream={remoteStream}
-                onEnd={endCall}
-                onMute={muteCall}
-                muted={muted}
-                incoming={callModal.incoming}
-                onAccept={acceptCall}
-                onDecline={declineCall}
-                username={callModal.username}
-              />
-            )}
+          ) : currentView === 'feed' ? (
+            <Feed
+              posts={posts}
+              user={user}
+              comments={comments}
+              showComments={showComments}
+              commentText={commentText}
+              onLike={handleLike}
+              onCommentInput={handleCommentInput}
+              onSubmitComment={handleSubmitComment}
+              onDeleteComment={handleDeleteComment}
+              onToggleComments={toggleComments}
+              onNavigateToProfile={navigateToProfile}
+              onPostClick={openPostModal}
+              stories={stories}
+              onStoryView={handleStoryView}
+              onCreateStory={() => setShowCreateStoryModal(true)}
+              onDeleteStory={handleDeleteStory}
+            />
+          ) : currentView === 'reels' ? (
+            <Reels
+              reels={reels}
+              user={user}
+              onReelView={handleReelView}
+              onCreateReel={() => setShowCreateReelModal(true)}
+              onDeleteReel={handleDeleteReel}
+              onNavigateToProfile={navigateToProfile}
+            />
+          ) : null}
+          {showPostModal && selectedPost && (
+            <PostModal
+              post={selectedPost}
+              user={user}
+              comments={comments[selectedPost._id] || []}
+              onClose={closePostModal}
+              onLike={() => handleLike(selectedPost._id)}
+              onDeleteComment={handleDeleteComment}
+              commentText={commentText[selectedPost._id] || ''}
+              onCommentInput={handleCommentInput}
+              onSubmitComment={handleSubmitComment}
+            />
+          )}
+          {showCreateStoryModal && (
+            <CreateStoryModal
+              onClose={() => setShowCreateStoryModal(false)}
+              onCreate={async ({ mediaFile, mediaType }) => {
+                const formData = new FormData();
+                formData.append('media', mediaFile);
+                formData.append('mediaType', mediaType);
+                await handleCreateStory(formData);
+              }}
+              uploading={uploadingStory}
+              error={createStoryError}
+            />
+          )}
+          {callModal.show && (
+            <CallModal
+              show={callModal.show}
+              type={callModal.type}
+              localStream={localStream}
+              remoteStream={remoteStream}
+              onEnd={endCall}
+              onMute={muteCall}
+              muted={muted}
+              incoming={callModal.incoming}
+              onAccept={acceptCall}
+              onDecline={declineCall}
+              username={callModal.username}
+            />
+          )}
 
             {showLiveCamera && liveStream && (
               <div className="fixed inset-0 bg-black z-50 flex flex-col">
