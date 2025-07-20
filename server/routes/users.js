@@ -9,8 +9,8 @@ router.get('/search', auth, userController.searchUsers);
 // Get current user profile (must come before /:id routes)
 router.get('/me', auth, userController.getCurrentUser);
 
-// Get user posts by ID (must come before /:id route)
-router.get('/:id/posts', userController.getUserPosts);
+// Get user posts by ID (must come before /:id route) - TEMPORARILY COMMENTED
+// router.get('/:id/posts', userController.getUserPosts);
 
 // Get user profile by ID
 router.get('/:id', userController.getUserProfile);
