@@ -15,6 +15,9 @@ import Login from './components/Login';
 import './components/SplashScreen.css';
 import Peer from 'simple-peer';
 import CallModal from './components/CallModal';
+import GroupList from './components/GroupList';
+import CreateGroupModal from './components/CreateGroupModal';
+import GroupChat from './components/GroupChat';
 
 // Add debugging for environment variables
 console.log('[App] Environment check:', {
@@ -159,6 +162,13 @@ function App() {
   const [showLiveCamera, setShowLiveCamera] = useState(false);
   const [liveStream, setLiveStream] = useState(null);
   const [liveType, setLiveType] = useState(''); // 'post' or 'reel'
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupMessages, setGroupMessages] = useState([]);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [createGroupError, setCreateGroupError] = useState('');
+  const [loadingGroupMessages, setLoadingGroupMessages] = useState(false);
 
   // Add hooks for handling Google OAuth redirect
   const location = window.location;
@@ -466,7 +476,7 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setInbox(data);
+      setInbox(Array.isArray(data) ? data : []);
     } catch (err) {
       setInbox([]);
     }
@@ -1764,6 +1774,79 @@ function App() {
   // Check if user is authenticated
   const isAuthenticated = user && token;
 
+  useEffect(() => {
+    if (token) fetchGroups();
+  }, [token]);
+
+  const fetchGroups = async () => {
+    try {
+      const res = await fetch(`${API_URL}/groups`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setGroups(data);
+    } catch (err) {
+      setGroups([]);
+    }
+  };
+
+  const handleCreateGroup = async ({ name, description, members }) => {
+    setCreatingGroup(true);
+    setCreateGroupError('');
+    try {
+      const res = await fetch(`${API_URL}/groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, description, members })
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to create group');
+      }
+      await fetchGroups();
+      setShowCreateGroupModal(false);
+    } catch (err) {
+      setCreateGroupError(err.message);
+    }
+    setCreatingGroup(false);
+  };
+
+  const fetchGroupMessages = async (groupId) => {
+    setLoadingGroupMessages(true);
+    try {
+      const res = await fetch(`${API_URL}/groups/${groupId}/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setGroupMessages(data);
+    } catch (err) {
+      setGroupMessages([]);
+    }
+    setLoadingGroupMessages(false);
+  };
+
+  const handleSendGroupMessage = async (text) => {
+    if (!selectedGroup) return;
+    try {
+      const res = await fetch(`${API_URL}/groups/${selectedGroup._id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ text })
+      });
+      if (res.ok) {
+        fetchGroupMessages(selectedGroup._id);
+      }
+    } catch (err) {
+      // Optionally show error
+    }
+  };
+
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
@@ -2720,6 +2803,24 @@ function App() {
           commentText={commentText[selectedPost._id] || ''}
           onCommentInput={handleCommentInput}
           onSubmitComment={handleSubmitComment}
+        />
+      )}
+      {showCreateGroupModal && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroupModal(false)}
+          onCreate={handleCreateGroup}
+          creating={creatingGroup}
+          error={createGroupError}
+        />
+      )}
+
+      {selectedGroup && (
+        <GroupChat
+          group={selectedGroup}
+          messages={groupMessages}
+          onSendMessage={handleSendGroupMessage}
+          user={user}
+          loading={loadingGroupMessages}
         />
       )}
     </div>

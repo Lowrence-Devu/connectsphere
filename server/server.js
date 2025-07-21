@@ -10,6 +10,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
 const authController = require('./controllers/authController');
+const groupRoutes = require('./routes/groups');
 
 // Load environment variables
 dotenv.config();
@@ -44,12 +45,12 @@ app.use(cors({
     'http://localhost:3000'
   ],
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(__dirname + '/uploads'));
 
 // Session middleware (required for passport)
 app.use(session({
@@ -304,6 +305,7 @@ app.use('/api/stories', require('./routes/stories'));
 app.use('/api/reels', require('./routes/reels'));
 app.use('/api/video-calls', require('./routes/videoCalls'));
 app.use('/api/push-notifications', require('./routes/pushNotifications'));
+app.use('/api/groups', groupRoutes);
 
 // Google OAuth routes (only if credentials are available)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {

@@ -39,8 +39,9 @@ exports.getConversation = async (req, res) => {
 // Get inbox (list of conversations)
 exports.getInbox = async (req, res) => {
   try {
-    // Find all users this user has messaged or received messages from
+    // Only direct messages (not group messages)
     const messages = await Message.find({
+      group: null,
       $or: [
         { sender: req.user._id },
         { receiver: req.user._id }
@@ -58,7 +59,7 @@ exports.getInbox = async (req, res) => {
           unread: 0
         };
       }
-      if (!msg.read && msg.receiver.equals(req.user._id)) {
+      if (!msg.read && msg.receiver && msg.receiver.equals(req.user._id)) {
         conversations[otherUser].unread += 1;
       }
     });

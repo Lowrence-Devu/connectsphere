@@ -106,8 +106,11 @@ exports.searchUsers = async (req, res) => {
 
     const searchRegex = new RegExp(q.trim(), 'i');
     let query = { 
-      username: searchRegex,
-      _id: { $ne: req.user?._id } // Exclude current user
+      $or: [
+        { username: searchRegex },
+        { email: searchRegex }
+      ],
+      _id: { $ne: req.user?._id }
     };
 
     // Add follower count filters

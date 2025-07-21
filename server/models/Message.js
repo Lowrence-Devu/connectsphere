@@ -10,7 +10,7 @@ const messageSchema = new Schema({
   receiver: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false, // Optional for group messages
   },
   text: {
     type: String,
@@ -19,6 +19,11 @@ const messageSchema = new Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  group: {
+    type: Schema.Types.ObjectId,
+    ref: 'Group',
+    default: null,
   },
   createdAt: {
     type: Date,
