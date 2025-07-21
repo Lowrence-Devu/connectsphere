@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { auth, isAdmin } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Post = require('../models/Post');
 
@@ -60,7 +60,7 @@ router.post('/:id/follow', auth, userController.followUser);
 // Unfollow a user
 router.post('/:id/unfollow', auth, userController.unfollowUser);
 
-// Add admin-only delete user route
-router.delete('/:id', auth, isAdmin, userController.deleteUser);
+// Add delete user route (no isAdmin middleware)
+router.delete('/:id', auth, userController.deleteUser);
 
 module.exports = router; 

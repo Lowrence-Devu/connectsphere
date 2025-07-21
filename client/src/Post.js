@@ -16,8 +16,16 @@ const Post = ({
   onSubmitComment
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [likeAnimating, setLikeAnimating] = useState(false);
   if (!post) return null;
   const isAuthor = user && post.author && (user._id === post.author._id || user.id === post.author._id);
+  const isLiked = post.likes && user && post.likes.includes(user._id);
+
+  const handleLikeClick = () => {
+    setLikeAnimating(true);
+    if (onLike) onLike();
+    setTimeout(() => setLikeAnimating(false), 500);
+  };
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 max-w-full sm:max-w-[500px] mx-auto mb-6 transition-all duration-200">
       {/* Post Header */}
@@ -75,10 +83,30 @@ const Post = ({
       {/* Post Actions */}
       <div className="flex items-center space-x-8 mb-3">
         <button
-          onClick={onLike}
-          className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-semibold focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2 py-1 rounded transition"
+          onClick={handleLikeClick}
+          className={`flex items-center space-x-1 font-semibold focus:outline-none hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2 py-1 rounded transition group`}
+          aria-label="Like post"
         >
-          <span>👍</span>
+          <span className={`relative w-6 h-6 flex items-center justify-center transition-transform duration-300 ${likeAnimating ? 'scale-125' : ''}`}>
+            <svg
+              className={`w-6 h-6 transition-colors duration-300 ${isLiked ? 'text-pink-500 fill-pink-500' : 'text-gray-400 fill-none'} ${likeAnimating ? 'animate-like-pop' : ''}`}
+              fill={isLiked ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 21C12 21 4 13.5 4 8.5C4 5.42 6.42 3 9.5 3C11.24 3 12.91 4.1 13.44 5.68C13.97 4.1 15.64 3 17.38 3C20.46 3 22.88 5.42 22.88 8.5C22.88 13.5 15 21 15 21H12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <style>{`
+              @keyframes like-pop {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.4); }
+                100% { transform: scale(1); }
+              }
+              .animate-like-pop {
+                animation: like-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+              }
+            `}</style>
+          </span>
           <span>{post.likes?.length || 0}</span>
         </button>
         <button

@@ -627,7 +627,7 @@ function App() {
       
       const data = await res.json();
       console.log('Posts fetched successfully:', data.length);
-      setPosts(data);
+      setPosts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching posts:', err);
       setError('Failed to load posts. Please refresh the page.');
@@ -948,7 +948,7 @@ function App() {
       }
       const res = await fetch(url);
       const data = await res.json();
-      setExplorePosts(data);
+      setExplorePosts(Array.isArray(data) ? data : []);
     } catch (err) {
       setExplorePosts([]);
     }
@@ -2420,14 +2420,14 @@ function App() {
               </div>
           ) : currentView === 'explore' ? (
             <Explore
-              posts={explorePosts}
+              posts={Array.isArray(explorePosts) ? explorePosts : []}
               onPostClick={openPostModal}
               onSearch={fetchExplorePosts}
-                searchUsers={searchUsers}
-                searchResults={searchResults}
-                showSearch={showSearch}
-                setShowSearch={setShowSearch}
-                navigateToProfile={navigateToProfile}
+              searchUsers={searchUsers}
+              searchResults={searchResults}
+              showSearch={showSearch}
+              setShowSearch={setShowSearch}
+              navigateToProfile={navigateToProfile}
             />
           ) : currentView === 'profile' ? (
             profileLoading ? (
@@ -2558,7 +2558,7 @@ function App() {
               />
           ) : currentView === 'feed' ? (
             <Feed
-              posts={posts}
+              posts={Array.isArray(posts) ? posts : []}
               user={user}
               comments={comments}
               showComments={showComments}

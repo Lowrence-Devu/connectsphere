@@ -25,7 +25,7 @@ const PostModal = ({
         <div className="flex flex-col md:flex-row">
           {post.image && (
             <div className="md:w-1/2 flex items-center justify-center p-4">
-              <img src={post.image} alt="Post" className="rounded-lg max-h-96 w-full object-cover" />
+              <img src={post.image} alt="Post" className="rounded-lg max-h-96 w-full object-contain" />
             </div>
           )}
           <div className="flex-1 p-4 flex flex-col">
